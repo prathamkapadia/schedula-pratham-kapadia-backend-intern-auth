@@ -45,6 +45,15 @@ export class DoctorProfile {
   @Column({ nullable: true })
   profilePictureUrl: string;
 
+  @Column({ default: true })
+  isAvailable: boolean;
+
+  @Column({ nullable: true })
+  achievement: string;
+
+  @Column({ type: 'jsonb', default: [] })
+  services: string[];
+
   @CreateDateColumn()
   createdAt: Date;
 

@@ -1,3 +1,5 @@
+import { IsBoolean } from 'class-validator';
+import { Transform } from 'class-transformer';
 import {
   IsString,
   IsNotEmpty,
@@ -102,4 +104,30 @@ export class UpdateDoctorProfileDto {
   @IsOptional()
   @IsString()
   profilePictureUrl?: string;
+}
+export class DoctorQueryDto {
+  @IsOptional()
+  @IsString()
+  specialization?: string;
+
+  @IsOptional()
+  @IsString()
+  search?: string;
+
+  @IsOptional()
+  @Type(() => Number)
+  @IsInt()
+  @Min(1)
+  page?: number = 1;
+
+  @IsOptional()
+  @Type(() => Number)
+  @IsInt()
+  @Min(1)
+  limit?: number = 10;
+
+  @IsOptional()
+  @Transform(({ value }) => value === 'true')
+  @IsBoolean()
+  availability?: boolean;
 }
