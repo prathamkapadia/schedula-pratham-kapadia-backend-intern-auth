@@ -33,11 +33,6 @@ class AppController {
       },
     };
   }
-
-  @Get('health')
-  health() {
-    return '🏥 Schedula API running! Hello World';
-  }
 }
 
 @Module({
