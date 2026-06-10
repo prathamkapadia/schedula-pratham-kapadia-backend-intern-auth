@@ -11,25 +11,25 @@ import { PatientProfile } from './patient/patient-profile.entity';
 @Controller()
 class AppController {
   @Get()
-  health() {
+  home() {
     return {
       message: '🏥 Schedula API running!',
       routes: {
         'POST /api/auth/signup': 'Register (DOCTOR or PATIENT)',
         'POST /api/auth/login': 'Login => get JWT token',
         'GET  /api/auth/me': 'Current user [any role]',
-        'POST  /api/doctor/profile': 'Create doctor profile [DOCTOR only]',
-        'GET   /api/doctor/profile': 'Get doctor profile [DOCTOR only]',
+        'POST /api/doctor/profile': 'Create doctor profile [DOCTOR only]',
+        'GET /api/doctor/profile': 'Get doctor profile [DOCTOR only]',
         'PATCH /api/doctor/profile': 'Update doctor profile [DOCTOR only]',
-        'GET   /api/doctor/dashboard': 'Doctor dashboard [DOCTOR only]',
-        'GET   /api/doctor/patients': 'List all patients [DOCTOR only]',
-        'GET   /api/doctor': 'Discover doctors [PUBLIC]',
-        'GET   /api/doctor/:id': 'Doctor profile by ID [PUBLIC]',
-        'POST  /api/patient/profile': 'Create patient profile [PATIENT only]',
-        'GET   /api/patient/profile': 'Get patient profile [PATIENT only]',
+        'GET /api/doctor/dashboard': 'Doctor dashboard [DOCTOR only]',
+        'GET /api/doctor/patients': 'List all patients [DOCTOR only]',
+        'GET /api/doctor': 'Discover doctors [PUBLIC]',
+        'GET /api/doctor/:id': 'Doctor profile by ID [PUBLIC]',
+        'POST /api/patient/profile': 'Create patient profile [PATIENT only]',
+        'GET /api/patient/profile': 'Get patient profile [PATIENT only]',
         'PATCH /api/patient/profile': 'Update patient profile [PATIENT only]',
-        'GET   /api/patient/dashboard': 'Patient dashboard [PATIENT only]',
-        'GET   /api/patient/doctors': 'List available doctors [PATIENT only]',
+        'GET /api/patient/dashboard': 'Patient dashboard [PATIENT only]',
+        'GET /api/patient/doctors': 'List available doctors [PATIENT only]',
       },
     };
   }
@@ -38,16 +38,15 @@ class AppController {
 @Module({
   imports: [
     ConfigModule.forRoot({ isGlobal: true }),
-   TypeOrmModule.forRootAsync({
-  useFactory: () => ({
-    type: 'postgres',
-url: process.env.DATABASE_URL || 'postgresql://postgres:HAPOMVPRWmZmpnRfPqzGOmwOZeDrRcKa@acela.proxy.rlwy.net:34318/railway',    entities: [User, DoctorProfile, PatientProfile],
-    synchronize: true,
-    ssl: { rejectUnauthorized: false },
-    extra: {
-      connectionString: process.env.DATABASE_URL || 'postgresql://neondb_owner:npg_Ito1md4xQbWk@ep-curly-unit-ao9bv1fi-pooler.c-2.ap-southeast-1.aws.neon.tech/neondb?sslmode=require',
-    },
-  }),
+   TypeOrmModule.forRoot({
+  type: 'postgres',
+  url: process.env.DATABASE_URL,
+  ssl: {
+    rejectUnauthorized: false,
+  },
+  entities: [User, DoctorProfile, PatientProfile],
+  synchronize: false,
+  migrations: ['dist/migrations/*.js'],
 }),
     AuthModule,
     DoctorModule,
