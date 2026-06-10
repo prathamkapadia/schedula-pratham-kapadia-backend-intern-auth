@@ -38,17 +38,16 @@ class AppController {
 @Module({
   imports: [
     ConfigModule.forRoot({ isGlobal: true }),
-    TypeOrmModule.forRootAsync({
+   TypeOrmModule.forRootAsync({
   useFactory: () => ({
     type: 'postgres',
-url: process.env.DATABASE_URL || 'postgresql://neondb_owner:npg_Ito1md4xQbWk@ep-curly-unit-ao9bv1fi-pooler.c-2.ap-southeast-1.aws.neon.tech:6543/neondb?sslmode=require&pgbouncer=true',    synchronize: true,
-    ssl: {
-      rejectUnauthorized: false,
-    },
+    url: process.env.DATABASE_URL || 'postgresql://neondb_owner:npg_Ito1md4xQbWk@ep-curly-unit-ao9bv1fi-pooler.c-2.ap-southeast-1.aws.neon.tech/neondb?sslmode=require',
+    entities: [User, DoctorProfile, PatientProfile],
+    synchronize: true,
+    ssl: { rejectUnauthorized: false },
     extra: {
-      options: '-c search_path=public',
+      connectionString: process.env.DATABASE_URL || 'postgresql://neondb_owner:npg_Ito1md4xQbWk@ep-curly-unit-ao9bv1fi-pooler.c-2.ap-southeast-1.aws.neon.tech/neondb?sslmode=require',
     },
-    connectTimeoutMS: 10000,
   }),
 }),
     AuthModule,
