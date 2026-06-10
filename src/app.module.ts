@@ -38,17 +38,17 @@ class AppController {
 @Module({
   imports: [
     ConfigModule.forRoot({ isGlobal: true }),
-    TypeOrmModule.forRoot({
-      type: 'postgres',
-      host: process.env.DB_HOST || 'localhost',
-      port: Number(process.env.DB_PORT) || 5432,
-      username: process.env.DB_USERNAME || 'postgres',
-      password: process.env.DB_PASSWORD || 'password',
-      database: process.env.DB_NAME || 'schedula',
-      entities: [User, DoctorProfile, PatientProfile],
-      synchronize: false,
-      migrations: ['dist/migrations/*.js'],
-    }),
+   TypeOrmModule.forRootAsync({
+  useFactory: () => ({
+    type: 'postgres',
+url: process.env.DATABASE_URL || 'postgresql://postgres:HAPOMVPRWmZmpnRfPqzGOmwOZeDrRcKa@acela.proxy.rlwy.net:34318/railway',    entities: [User, DoctorProfile, PatientProfile],
+    synchronize: true,
+    ssl: { rejectUnauthorized: false },
+    extra: {
+      connectionString: process.env.DATABASE_URL || 'postgresql://neondb_owner:npg_Ito1md4xQbWk@ep-curly-unit-ao9bv1fi-pooler.c-2.ap-southeast-1.aws.neon.tech/neondb?sslmode=require',
+    },
+  }),
+}),
     AuthModule,
     DoctorModule,
     PatientModule,
