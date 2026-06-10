@@ -36,6 +36,7 @@ class AppController {
 }
 
 @Module({
+  
   imports: [
     ConfigModule.forRoot({ isGlobal: true }),
     TypeOrmModule.forRoot({
