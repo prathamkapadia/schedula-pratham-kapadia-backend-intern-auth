@@ -38,7 +38,7 @@ class AppController {
 @Module({
   imports: [
     ConfigModule.forRoot({ isGlobal: true }),
-    TypeOrmModule.forRoot({
+   TypeOrmModule.forRoot({
   type: 'postgres',
   url: process.env.DATABASE_URL,
   ssl: {
