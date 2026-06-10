@@ -41,8 +41,7 @@ class AppController {
     TypeOrmModule.forRootAsync({
   useFactory: () => ({
     type: 'postgres',
-url: process.env.DATABASE_URL || 'postgresql://neondb_owner:npg_Ito1md4xQbWk@ep-curly-unit-ao9bv1fi-pooler.c-2.ap-southeast-1.aws.neon.tech/neondb?sslmode=require&pgbouncer=true',    entities: [User, DoctorProfile, PatientProfile],
-    synchronize: true,
+url: process.env.DATABASE_URL || 'postgresql://neondb_owner:npg_Ito1md4xQbWk@ep-curly-unit-ao9bv1fi-pooler.c-2.ap-southeast-1.aws.neon.tech:6543/neondb?sslmode=require&pgbouncer=true',    synchronize: true,
     ssl: {
       rejectUnauthorized: false,
     },
