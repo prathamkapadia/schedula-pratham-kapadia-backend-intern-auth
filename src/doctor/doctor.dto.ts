@@ -7,10 +7,11 @@ import {
   IsArray,
   ValidateNested,
   IsInt,
+  IsBoolean,
   Min,
   Max,
 } from 'class-validator';
-import { Type } from 'class-transformer';
+import { Type, Transform } from 'class-transformer';
 
 export class AvailabilitySlotDto {
   @IsString()
@@ -102,4 +103,35 @@ export class UpdateDoctorProfileDto {
   @IsOptional()
   @IsString()
   profilePictureUrl?: string;
+}
+
+export class DoctorQueryDto {
+  @IsOptional()
+  @IsString()
+  specialization?: string;
+
+  @IsOptional()
+  @IsString()
+  search?: string;
+
+  @IsOptional()
+  @Type(() => Number)
+  @IsInt()
+  @Min(1)
+  page?: number;
+
+  @IsOptional()
+  @Type(() => Number)
+  @IsInt()
+  @Min(1)
+  limit?: number;
+
+  @IsOptional()
+  @Transform(({ value }) => {
+    if (value === 'true') return true;
+    if (value === 'false') return false;
+    return undefined;
+  })
+  @IsBoolean()
+  availability?: boolean;
 }

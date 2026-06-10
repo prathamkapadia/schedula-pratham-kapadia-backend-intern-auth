@@ -9,6 +9,9 @@ import {
   UseGuards,
   ConflictException,
   NotFoundException,
+  BadRequestException,
+  Query,
+  Param,
 } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
 import { Repository } from 'typeorm';
@@ -17,7 +20,7 @@ import { User, Role } from '../auth/user.entity';
 import { AuthModule } from '../auth/auth.module';
 import { JwtAuthGuard, RolesGuard, Roles, CurrentUser } from '../common/guards/auth.guards';
 import { DoctorProfile } from './doctor-profile.entity';
-import { CreateDoctorProfileDto, UpdateDoctorProfileDto } from './doctor.dto';
+import { CreateDoctorProfileDto, UpdateDoctorProfileDto, DoctorQueryDto } from './doctor.dto';
 
 @Injectable()
 export class DoctorService {
@@ -88,6 +91,103 @@ export class DoctorService {
     });
     return { success: true, count: patients.length, patients };
   }
+
+  async discoverDoctors(query: DoctorQueryDto) {
+    const page = Math.max(1, query.page || 1);
+    const limit = Math.max(1, Math.min(query.limit || 10, 100));
+    const skip = (page - 1) * limit;
+
+    const qb = this.doctorProfileRepo
+      .createQueryBuilder('doctor')
+      .select([
+        'doctor.id',
+        'doctor.fullName',
+        'doctor.specialization',
+        'doctor.experienceYears',
+        'doctor.consultationFee',
+        'doctor.isAvailable',
+        'doctor.profilePictureUrl',
+        'doctor.achievement',
+        'doctor.services',
+      ]);
+
+    if (query.specialization) {
+      qb.andWhere('LOWER(doctor.specialization) = LOWER(:specialization)', {
+        specialization: query.specialization,
+      });
+    }
+
+    if (query.search) {
+      qb.andWhere('LOWER(doctor.fullName) LIKE LOWER(:search)', {
+        search: `%${query.search}%`,
+      });
+    }
+
+    if (query.availability !== undefined) {
+      qb.andWhere('doctor.isAvailable = :availability', {
+        availability: query.availability,
+      });
+    }
+
+    const total = await qb.getCount();
+
+    if (total === 0) {
+      return {
+        success: true,
+        message: 'No doctors found matching your criteria',
+        data: [],
+        pagination: { page, limit, total: 0, totalPages: 0 },
+      };
+    }
+
+    const doctors = await qb.skip(skip).take(limit).getMany();
+
+    return {
+      success: true,
+      message: 'Doctors fetched successfully',
+      data: doctors,
+      pagination: {
+        page,
+        limit,
+        total,
+        totalPages: Math.ceil(total / limit),
+      },
+    };
+  }
+
+  async discoverDoctorById(id: string) {
+    if (!id.match(/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i)) {
+      throw new BadRequestException('Invalid doctor ID format');
+    }
+
+    const doctor = await this.doctorProfileRepo.findOne({
+      where: { id },
+      select: {
+        id: true,
+        fullName: true,
+        specialization: true,
+        experienceYears: true,
+        qualification: true,
+        consultationFee: true,
+        isAvailable: true,
+        availability: true,
+        bio: true,
+        profilePictureUrl: true,
+        achievement: true,
+        services: true,
+      },
+    });
+
+    if (!doctor) {
+      throw new NotFoundException(`Doctor with ID ${id} not found`);
+    }
+
+    return {
+      success: true,
+      message: 'Doctor profile fetched successfully',
+      data: doctor,
+    };
+  }
 }
 
 @Controller('api/doctor')
@@ -122,9 +222,24 @@ export class DoctorController {
   }
 }
 
+@Controller('api/doctor')
+export class DoctorDiscoveryController {
+  constructor(private readonly doctorService: DoctorService) {}
+
+  @Get()
+  discoverDoctors(@Query() query: DoctorQueryDto) {
+    return this.doctorService.discoverDoctors(query);
+  }
+
+  @Get(':id')
+  discoverDoctorById(@Param('id') id: string) {
+    return this.doctorService.discoverDoctorById(id);
+  }
+}
+
 @Module({
   imports: [TypeOrmModule.forFeature([DoctorProfile]), AuthModule],
-  controllers: [DoctorController],
+  controllers: [DoctorController, DoctorDiscoveryController],
   providers: [DoctorService],
 })
 export class DoctorModule {}
