@@ -36,17 +36,18 @@ class AppController {
 }
 
 @Module({
-  
   imports: [
     ConfigModule.forRoot({ isGlobal: true }),
-    TypeOrmModule.forRoot({
-      type: 'postgres',
-      url: process.env.DATABASE_URL,
-      entities: [User, DoctorProfile, PatientProfile],
-      synchronize: true,
-      ssl: {
-        rejectUnauthorized: false,
-      },
+    TypeOrmModule.forRootAsync({
+      useFactory: () => ({
+        type: 'postgres',
+        url: process.env.DATABASE_URL,
+        entities: [User, DoctorProfile, PatientProfile],
+        synchronize: true,
+        ssl: {
+          rejectUnauthorized: false,
+        },
+      }),
     }),
     AuthModule,
     DoctorModule,
