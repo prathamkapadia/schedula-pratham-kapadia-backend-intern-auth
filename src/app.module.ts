@@ -7,6 +7,7 @@ import { PatientModule } from './patient/patient.module';
 import { User } from './auth/user.entity';
 import { DoctorProfile } from './doctor/doctor-profile.entity';
 import { PatientProfile } from './patient/patient-profile.entity';
+import { RecurringAvailability, CustomAvailability } from './doctor/availability.entity';
 
 @Controller()
 class AppController {
@@ -44,7 +45,7 @@ class AppController {
   ssl: {
     rejectUnauthorized: false,
   },
-  entities: [User, DoctorProfile, PatientProfile],
+  entities: [User, DoctorProfile, PatientProfile, RecurringAvailability, CustomAvailability],
   synchronize: false,
   migrations: ['dist/migrations/*.js'],
 }),
