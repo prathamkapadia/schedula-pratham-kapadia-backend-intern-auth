@@ -21,6 +21,9 @@ import { AuthModule } from '../auth/auth.module';
 import { JwtAuthGuard, RolesGuard, Roles, CurrentUser } from '../common/guards/auth.guards';
 import { DoctorProfile } from './doctor-profile.entity';
 import { CreateDoctorProfileDto, UpdateDoctorProfileDto, DoctorQueryDto } from './doctor.dto';
+import { RecurringAvailability, CustomAvailability } from './availability.entity';
+import { AvailabilityService } from './availability.service';
+import { AvailabilityController } from './availability.controller';
 
 @Injectable()
 export class DoctorService {
@@ -238,8 +241,15 @@ export class DoctorDiscoveryController {
 }
 
 @Module({
-  imports: [TypeOrmModule.forFeature([DoctorProfile]), AuthModule],
-  controllers: [DoctorController, DoctorDiscoveryController],
-  providers: [DoctorService],
+  imports: [
+    TypeOrmModule.forFeature([
+      DoctorProfile,
+      RecurringAvailability,
+      CustomAvailability,
+    ]),
+    AuthModule,
+  ],
+  controllers: [DoctorController, DoctorDiscoveryController, AvailabilityController],
+  providers: [DoctorService, AvailabilityService],
 })
 export class DoctorModule {}
