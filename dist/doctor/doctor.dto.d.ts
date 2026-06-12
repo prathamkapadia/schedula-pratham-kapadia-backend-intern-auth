@@ -12,6 +12,7 @@ export declare class CreateDoctorProfileDto {
     availability: AvailabilitySlotDto[];
     bio?: string;
     profilePictureUrl?: string;
+    slotDuration?: number;
 }
 export declare class UpdateDoctorProfileDto {
     fullName?: string;
@@ -22,6 +23,7 @@ export declare class UpdateDoctorProfileDto {
     availability?: AvailabilitySlotDto[];
     bio?: string;
     profilePictureUrl?: string;
+    slotDuration?: number;
 }
 export declare class DoctorQueryDto {
     specialization?: string;

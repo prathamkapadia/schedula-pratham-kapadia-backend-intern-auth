@@ -42,6 +42,7 @@ class CreateDoctorProfileDto {
     availability;
     bio;
     profilePictureUrl;
+    slotDuration;
 }
 exports.CreateDoctorProfileDto = CreateDoctorProfileDto;
 __decorate([
@@ -86,6 +87,13 @@ __decorate([
     (0, class_validator_1.IsString)(),
     __metadata("design:type", String)
 ], CreateDoctorProfileDto.prototype, "profilePictureUrl", void 0);
+__decorate([
+    (0, class_validator_1.IsOptional)(),
+    (0, class_validator_1.IsInt)(),
+    (0, class_validator_1.Min)(10),
+    (0, class_validator_1.Max)(120),
+    __metadata("design:type", Number)
+], CreateDoctorProfileDto.prototype, "slotDuration", void 0);
 class UpdateDoctorProfileDto {
     fullName;
     specialization;
@@ -95,6 +103,7 @@ class UpdateDoctorProfileDto {
     availability;
     bio;
     profilePictureUrl;
+    slotDuration;
 }
 exports.UpdateDoctorProfileDto = UpdateDoctorProfileDto;
 __decorate([
@@ -145,6 +154,13 @@ __decorate([
     (0, class_validator_1.IsString)(),
     __metadata("design:type", String)
 ], UpdateDoctorProfileDto.prototype, "profilePictureUrl", void 0);
+__decorate([
+    (0, class_validator_1.IsOptional)(),
+    (0, class_validator_1.IsInt)(),
+    (0, class_validator_1.Min)(10),
+    (0, class_validator_1.Max)(120),
+    __metadata("design:type", Number)
+], UpdateDoctorProfileDto.prototype, "slotDuration", void 0);
 class DoctorQueryDto {
     specialization;
     search;

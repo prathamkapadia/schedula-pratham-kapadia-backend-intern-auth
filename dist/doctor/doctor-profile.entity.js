@@ -27,6 +27,7 @@ let DoctorProfile = class DoctorProfile {
     isAvailable;
     achievement;
     services;
+    slotDuration;
     createdAt;
     updatedAt;
 };
@@ -88,6 +89,10 @@ __decorate([
     (0, typeorm_1.Column)({ type: 'jsonb', default: [] }),
     __metadata("design:type", Array)
 ], DoctorProfile.prototype, "services", void 0);
+__decorate([
+    (0, typeorm_1.Column)({ type: 'int', name: 'slot_duration', default: 30 }),
+    __metadata("design:type", Number)
+], DoctorProfile.prototype, "slotDuration", void 0);
 __decorate([
     (0, typeorm_1.CreateDateColumn)(),
     __metadata("design:type", Date)
