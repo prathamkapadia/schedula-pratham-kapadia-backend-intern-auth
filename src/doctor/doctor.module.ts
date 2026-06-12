@@ -21,6 +21,12 @@ import { AuthModule } from '../auth/auth.module';
 import { JwtAuthGuard, RolesGuard, Roles, CurrentUser } from '../common/guards/auth.guards';
 import { DoctorProfile } from './doctor-profile.entity';
 import { CreateDoctorProfileDto, UpdateDoctorProfileDto, DoctorQueryDto } from './doctor.dto';
+import { RecurringAvailability, CustomAvailability } from './availability.entity';
+import { AvailabilityService } from './availability.service';
+import { AvailabilityController } from './availability.controller';
+import { Slot } from './slot.entity';
+import { SlotService } from './slot.service';
+import { SlotController } from './slot.controller';
 
 @Injectable()
 export class DoctorService {
@@ -109,6 +115,7 @@ export class DoctorService {
         'doctor.profilePictureUrl',
         'doctor.achievement',
         'doctor.services',
+        'doctor.slotDuration',
       ]);
 
     if (query.specialization) {
@@ -146,12 +153,7 @@ export class DoctorService {
       success: true,
       message: 'Doctors fetched successfully',
       data: doctors,
-      pagination: {
-        page,
-        limit,
-        total,
-        totalPages: Math.ceil(total / limit),
-      },
+      pagination: { page, limit, total, totalPages: Math.ceil(total / limit) },
     };
   }
 
@@ -175,6 +177,7 @@ export class DoctorService {
         profilePictureUrl: true,
         achievement: true,
         services: true,
+        slotDuration: true,
       },
     });
 
@@ -238,8 +241,21 @@ export class DoctorDiscoveryController {
 }
 
 @Module({
-  imports: [TypeOrmModule.forFeature([DoctorProfile]), AuthModule],
-  controllers: [DoctorController, DoctorDiscoveryController],
-  providers: [DoctorService],
+  imports: [
+    TypeOrmModule.forFeature([
+      DoctorProfile,
+      RecurringAvailability,
+      CustomAvailability,
+      Slot,
+    ]),
+    AuthModule,
+  ],
+  controllers: [
+    DoctorController,
+    DoctorDiscoveryController,
+    AvailabilityController,
+    SlotController,
+  ],
+  providers: [DoctorService, AvailabilityService, SlotService],
 })
 export class DoctorModule {}

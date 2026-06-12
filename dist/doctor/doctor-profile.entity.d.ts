@@ -18,6 +18,7 @@ export declare class DoctorProfile {
     isAvailable: boolean;
     achievement: string;
     services: string[];
+    slotDuration: number;
     createdAt: Date;
     updatedAt: Date;
 }

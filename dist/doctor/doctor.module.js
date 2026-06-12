@@ -22,6 +22,12 @@ const auth_module_1 = require("../auth/auth.module");
 const auth_guards_1 = require("../common/guards/auth.guards");
 const doctor_profile_entity_1 = require("./doctor-profile.entity");
 const doctor_dto_1 = require("./doctor.dto");
+const availability_entity_1 = require("./availability.entity");
+const availability_service_1 = require("./availability.service");
+const availability_controller_1 = require("./availability.controller");
+const slot_entity_1 = require("./slot.entity");
+const slot_service_1 = require("./slot.service");
+const slot_controller_1 = require("./slot.controller");
 let DoctorService = class DoctorService {
     doctorProfileRepo;
     userRepo;
@@ -95,6 +101,7 @@ let DoctorService = class DoctorService {
             'doctor.profilePictureUrl',
             'doctor.achievement',
             'doctor.services',
+            'doctor.slotDuration',
         ]);
         if (query.specialization) {
             qb.andWhere('LOWER(doctor.specialization) = LOWER(:specialization)', {
@@ -125,12 +132,7 @@ let DoctorService = class DoctorService {
             success: true,
             message: 'Doctors fetched successfully',
             data: doctors,
-            pagination: {
-                page,
-                limit,
-                total,
-                totalPages: Math.ceil(total / limit),
-            },
+            pagination: { page, limit, total, totalPages: Math.ceil(total / limit) },
         };
     }
     async discoverDoctorById(id) {
@@ -152,6 +154,7 @@ let DoctorService = class DoctorService {
                 profilePictureUrl: true,
                 achievement: true,
                 services: true,
+                slotDuration: true,
             },
         });
         if (!doctor) {
@@ -272,9 +275,22 @@ let DoctorModule = class DoctorModule {
 exports.DoctorModule = DoctorModule;
 exports.DoctorModule = DoctorModule = __decorate([
     (0, common_1.Module)({
-        imports: [typeorm_3.TypeOrmModule.forFeature([doctor_profile_entity_1.DoctorProfile]), auth_module_1.AuthModule],
-        controllers: [DoctorController, DoctorDiscoveryController],
-        providers: [DoctorService],
+        imports: [
+            typeorm_3.TypeOrmModule.forFeature([
+                doctor_profile_entity_1.DoctorProfile,
+                availability_entity_1.RecurringAvailability,
+                availability_entity_1.CustomAvailability,
+                slot_entity_1.Slot,
+            ]),
+            auth_module_1.AuthModule,
+        ],
+        controllers: [
+            DoctorController,
+            DoctorDiscoveryController,
+            availability_controller_1.AvailabilityController,
+            slot_controller_1.SlotController,
+        ],
+        providers: [DoctorService, availability_service_1.AvailabilityService, slot_service_1.SlotService],
     })
 ], DoctorModule);
 //# sourceMappingURL=doctor.module.js.map
