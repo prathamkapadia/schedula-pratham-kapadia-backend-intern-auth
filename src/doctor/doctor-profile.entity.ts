@@ -54,6 +54,11 @@ export class DoctorProfile {
   @Column({ type: 'jsonb', default: [] })
   services: string[];
 
+  // Slot duration in minutes — varies by specialization
+  // e.g. Dermatologist: 30, Gynaecologist: 60, General Physician: 15
+  @Column({ type: 'int', name: 'slot_duration', default: 30 })
+  slotDuration: number;
+
   @CreateDateColumn()
   createdAt: Date;
 

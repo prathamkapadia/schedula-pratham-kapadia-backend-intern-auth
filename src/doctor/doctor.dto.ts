@@ -61,6 +61,13 @@ export class CreateDoctorProfileDto {
   @IsOptional()
   @IsString()
   profilePictureUrl?: string;
+
+  // Slot duration in minutes — min 10, max 120
+  @IsOptional()
+  @IsInt()
+  @Min(10)
+  @Max(120)
+  slotDuration?: number;
 }
 
 export class UpdateDoctorProfileDto {
@@ -103,6 +110,13 @@ export class UpdateDoctorProfileDto {
   @IsOptional()
   @IsString()
   profilePictureUrl?: string;
+
+  // Slot duration in minutes — min 10, max 120
+  @IsOptional()
+  @IsInt()
+  @Min(10)
+  @Max(120)
+  slotDuration?: number;
 }
 
 export class DoctorQueryDto {
