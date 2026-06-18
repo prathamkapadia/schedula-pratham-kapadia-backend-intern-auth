@@ -21,6 +21,14 @@ import { AuthModule } from '../auth/auth.module';
 import { JwtAuthGuard, RolesGuard, Roles, CurrentUser } from '../common/guards/auth.guards';
 import { DoctorProfile } from './doctor-profile.entity';
 import { CreateDoctorProfileDto, UpdateDoctorProfileDto, DoctorQueryDto } from './doctor.dto';
+import { RecurringAvailability, CustomAvailability } from './availability.entity';
+import { AvailabilityService } from './availability.service';
+import { AvailabilityController } from './availability.controller';
+import { Slot } from './slot.entity';
+import { SlotService } from './slot.service';
+import { SlotController } from './slot.controller';
+import { Appointment } from '../appointment/appointment.entity';
+import { AppointmentService } from '../appointment/appointment.service';
 
 @Injectable()
 export class DoctorService {
@@ -109,6 +117,10 @@ export class DoctorService {
         'doctor.profilePictureUrl',
         'doctor.achievement',
         'doctor.services',
+        'doctor.slotDuration',
+        'doctor.schedulingType',
+        'doctor.bufferTime',
+        'doctor.maxPatientsPerWave',
       ]);
 
     if (query.specialization) {
@@ -175,6 +187,10 @@ export class DoctorService {
         profilePictureUrl: true,
         achievement: true,
         services: true,
+        slotDuration: true,
+        schedulingType: true,
+        bufferTime: true,
+        maxPatientsPerWave: true,
       },
     });
 
@@ -194,7 +210,10 @@ export class DoctorService {
 @UseGuards(JwtAuthGuard, RolesGuard)
 @Roles(Role.DOCTOR)
 export class DoctorController {
-  constructor(private readonly doctorService: DoctorService) {}
+  constructor(
+    private readonly doctorService: DoctorService,
+    private readonly appointmentService: AppointmentService,
+  ) {}
 
   @Post('profile')
   createProfile(@CurrentUser() user: User, @Body() dto: CreateDoctorProfileDto) {
@@ -220,6 +239,12 @@ export class DoctorController {
   getAllPatients() {
     return this.doctorService.getAllPatients();
   }
+
+  // GET /api/doctor/appointments — Doctor views their appointments
+  @Get('appointments')
+  getDoctorAppointments(@CurrentUser() user: User) {
+    return this.appointmentService.getDoctorAppointments(user);
+  }
 }
 
 @Controller('api/doctor')
@@ -238,8 +263,23 @@ export class DoctorDiscoveryController {
 }
 
 @Module({
-  imports: [TypeOrmModule.forFeature([DoctorProfile]), AuthModule],
-  controllers: [DoctorController, DoctorDiscoveryController],
-  providers: [DoctorService],
+  imports: [
+    TypeOrmModule.forFeature([
+      DoctorProfile,
+      RecurringAvailability,
+      CustomAvailability,
+      Slot,
+      Appointment,
+      User,
+    ]),
+    AuthModule,
+  ],
+  controllers: [
+    DoctorController,
+    AvailabilityController,
+    SlotController,
+    DoctorDiscoveryController,
+  ],
+  providers: [DoctorService, AvailabilityService, SlotService, AppointmentService],
 })
 export class DoctorModule {}
