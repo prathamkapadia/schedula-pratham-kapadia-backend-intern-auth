@@ -8,10 +8,13 @@ import {
   ValidateNested,
   IsInt,
   IsBoolean,
+  IsEnum,
   Min,
   Max,
+  ValidateIf,
 } from 'class-validator';
 import { Type, Transform } from 'class-transformer';
+import { SchedulingType } from './doctor-profile.entity';
 
 export class AvailabilitySlotDto {
   @IsString()
@@ -61,6 +64,34 @@ export class CreateDoctorProfileDto {
   @IsOptional()
   @IsString()
   profilePictureUrl?: string;
+
+  // Slot duration in minutes — min 10, max 120 — used only for STREAM
+  @IsOptional()
+  @IsInt()
+  @Min(10)
+  @Max(120)
+  slotDuration?: number;
+
+  // STREAM or WAVE — defaults to STREAM if not provided
+  @IsOptional()
+  @IsEnum(SchedulingType, {
+    message: `schedulingType must be one of: ${Object.values(SchedulingType).join(', ')}`,
+  })
+  schedulingType?: SchedulingType;
+
+  // Buffer time in minutes between STREAM slots — only relevant for STREAM
+  @IsOptional()
+  @IsInt()
+  @Min(0)
+  @Max(60)
+  bufferTime?: number;
+
+  // Required when schedulingType is WAVE — validated in service layer too
+  @ValidateIf((o) => o.schedulingType === SchedulingType.WAVE)
+  @IsInt()
+  @Min(1)
+  @Max(50)
+  maxPatientsPerWave?: number;
 }
 
 export class UpdateDoctorProfileDto {
@@ -103,6 +134,30 @@ export class UpdateDoctorProfileDto {
   @IsOptional()
   @IsString()
   profilePictureUrl?: string;
+
+  @IsOptional()
+  @IsInt()
+  @Min(10)
+  @Max(120)
+  slotDuration?: number;
+
+  @IsOptional()
+  @IsEnum(SchedulingType, {
+    message: `schedulingType must be one of: ${Object.values(SchedulingType).join(', ')}`,
+  })
+  schedulingType?: SchedulingType;
+
+  @IsOptional()
+  @IsInt()
+  @Min(0)
+  @Max(60)
+  bufferTime?: number;
+
+  @ValidateIf((o) => o.schedulingType === SchedulingType.WAVE)
+  @IsInt()
+  @Min(1)
+  @Max(50)
+  maxPatientsPerWave?: number;
 }
 
 export class DoctorQueryDto {

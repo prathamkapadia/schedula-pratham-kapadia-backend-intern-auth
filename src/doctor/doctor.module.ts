@@ -24,6 +24,11 @@ import { CreateDoctorProfileDto, UpdateDoctorProfileDto, DoctorQueryDto } from '
 import { RecurringAvailability, CustomAvailability } from './availability.entity';
 import { AvailabilityService } from './availability.service';
 import { AvailabilityController } from './availability.controller';
+import { Slot } from './slot.entity';
+import { SlotService } from './slot.service';
+import { SlotController } from './slot.controller';
+import { Appointment } from '../appointment/appointment.entity';
+import { AppointmentService } from '../appointment/appointment.service';
 
 @Injectable()
 export class DoctorService {
@@ -112,6 +117,10 @@ export class DoctorService {
         'doctor.profilePictureUrl',
         'doctor.achievement',
         'doctor.services',
+        'doctor.slotDuration',
+        'doctor.schedulingType',
+        'doctor.bufferTime',
+        'doctor.maxPatientsPerWave',
       ]);
 
     if (query.specialization) {
@@ -119,13 +128,11 @@ export class DoctorService {
         specialization: query.specialization,
       });
     }
-
     if (query.search) {
       qb.andWhere('LOWER(doctor.fullName) LIKE LOWER(:search)', {
         search: `%${query.search}%`,
       });
     }
-
     if (query.availability !== undefined) {
       qb.andWhere('doctor.isAvailable = :availability', {
         availability: query.availability,
@@ -133,7 +140,6 @@ export class DoctorService {
     }
 
     const total = await qb.getCount();
-
     if (total === 0) {
       return {
         success: true,
@@ -144,7 +150,6 @@ export class DoctorService {
     }
 
     const doctors = await qb.skip(skip).take(limit).getMany();
-
     return {
       success: true,
       message: 'Doctors fetched successfully',
@@ -162,7 +167,6 @@ export class DoctorService {
     if (!id.match(/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i)) {
       throw new BadRequestException('Invalid doctor ID format');
     }
-
     const doctor = await this.doctorProfileRepo.findOne({
       where: { id },
       select: {
@@ -178,18 +182,16 @@ export class DoctorService {
         profilePictureUrl: true,
         achievement: true,
         services: true,
+        slotDuration: true,
+        schedulingType: true,
+        bufferTime: true,
+        maxPatientsPerWave: true,
       },
     });
-
     if (!doctor) {
       throw new NotFoundException(`Doctor with ID ${id} not found`);
     }
-
-    return {
-      success: true,
-      message: 'Doctor profile fetched successfully',
-      data: doctor,
-    };
+    return { success: true, message: 'Doctor profile fetched successfully', data: doctor };
   }
 }
 
@@ -197,7 +199,10 @@ export class DoctorService {
 @UseGuards(JwtAuthGuard, RolesGuard)
 @Roles(Role.DOCTOR)
 export class DoctorController {
-  constructor(private readonly doctorService: DoctorService) {}
+  constructor(
+    private readonly doctorService: DoctorService,
+    private readonly appointmentService: AppointmentService,
+  ) {}
 
   @Post('profile')
   createProfile(@CurrentUser() user: User, @Body() dto: CreateDoctorProfileDto) {
@@ -223,6 +228,12 @@ export class DoctorController {
   getAllPatients() {
     return this.doctorService.getAllPatients();
   }
+
+  // GET /api/doctor/appointments — Doctor views their appointments
+  @Get('appointments')
+  getDoctorAppointments(@CurrentUser() user: User) {
+    return this.appointmentService.getDoctorAppointments(user);
+  }
 }
 
 @Controller('api/doctor')
@@ -241,6 +252,9 @@ export class DoctorDiscoveryController {
 }
 
 @Module({
+  imports: [TypeOrmModule.forFeature([DoctorProfile]), AuthModule],
+  controllers: [DoctorController, DoctorDiscoveryController],
+  providers: [DoctorService],
   imports: [
     TypeOrmModule.forFeature([
       DoctorProfile,
@@ -251,5 +265,18 @@ export class DoctorDiscoveryController {
   ],
   controllers: [DoctorController, DoctorDiscoveryController, AvailabilityController],
   providers: [DoctorService, AvailabilityService],
+      Slot,
+      Appointment,
+      User,
+    ]),
+    AuthModule,
+  ],
+  controllers: [
+    DoctorController,
+    AvailabilityController,
+    SlotController,
+    DoctorDiscoveryController,
+  ],
+  providers: [DoctorService, AvailabilityService, SlotService, AppointmentService],
 })
 export class DoctorModule {}
