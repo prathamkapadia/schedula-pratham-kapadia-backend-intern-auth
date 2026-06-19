@@ -14,6 +14,7 @@ import { Slot } from '../doctor/slot.entity';
 export enum AppointmentStatus {
   BOOKED = 'BOOKED',
   CANCELLED = 'CANCELLED',
+  RESCHEDULED = 'RESCHEDULED',
 }
 
 @Entity('appointments')
@@ -58,9 +59,14 @@ export class Appointment {
   })
   status: AppointmentStatus;
 
-  // Only set for WAVE bookings — patient's position in the booking order for that window
   @Column({ type: 'int', name: 'token_number', nullable: true })
   tokenNumber: number | null;
+
+  @Column({ type: 'uuid', name: 'rescheduled_from_id', nullable: true })
+  rescheduledFromId: string | null;
+
+  @Column({ name: 'rescheduled_at', type: 'timestamp', nullable: true })
+  rescheduledAt: Date | null;
 
   @CreateDateColumn({ name: 'created_at' })
   createdAt: Date;
