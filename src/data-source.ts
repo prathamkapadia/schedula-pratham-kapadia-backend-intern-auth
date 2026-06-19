@@ -8,11 +8,25 @@ import { DoctorProfile } from './doctor/doctor-profile.entity';
 import { PatientProfile } from './patient/patient-profile.entity';
 import { RecurringAvailability } from './doctor/availability.entity';
 import { CustomAvailability } from './doctor/availability.entity';
+import { RecurringAvailability, CustomAvailability } from './doctor/availability.entity';
+import { Slot } from './doctor/slot.entity';
+import { Appointment } from './appointment/appointment.entity';
 
 export const AppDataSource = new DataSource({
   type: 'postgres',
   url: process.env.DATABASE_URL,
   entities: [User, DoctorProfile, PatientProfile, RecurringAvailability, CustomAvailability],
+  entities: [User, DoctorProfile, PatientProfile],
+  entities: [
+    User,
+    DoctorProfile,
+    PatientProfile,
+    RecurringAvailability,
+    CustomAvailability,
+    Slot,
+    Appointment,
+  ],
+
   migrations: ['dist/migrations/*.js'],
   synchronize: false,
   ssl: {
