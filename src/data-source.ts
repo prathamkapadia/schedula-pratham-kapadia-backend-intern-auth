@@ -13,6 +13,7 @@ import { Appointment } from './appointment/appointment.entity';
 export const AppDataSource = new DataSource({
   type: 'postgres',
   url: process.env.DATABASE_URL,
+  entities: [User, DoctorProfile, PatientProfile],
   entities: [
     User,
     DoctorProfile,
@@ -22,6 +23,7 @@ export const AppDataSource = new DataSource({
     Slot,
     Appointment,
   ],
+
   migrations: ['dist/migrations/*.js'],
   synchronize: false,
   ssl: {
