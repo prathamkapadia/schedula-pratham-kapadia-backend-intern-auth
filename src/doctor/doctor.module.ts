@@ -21,6 +21,17 @@ import { AuthModule } from '../auth/auth.module';
 import { JwtAuthGuard, RolesGuard, Roles, CurrentUser } from '../common/guards/auth.guards';
 import { DoctorProfile } from './doctor-profile.entity';
 import { CreateDoctorProfileDto, UpdateDoctorProfileDto, DoctorQueryDto } from './doctor.dto';
+<<<<<<< Updated upstream
+=======
+import { RecurringAvailability, CustomAvailability } from './availability.entity';
+import { AvailabilityService } from './availability.service';
+import { AvailabilityController } from './availability.controller';
+import { Slot } from './slot.entity';
+import { SlotService } from './slot.service';
+import { SlotController } from './slot.controller';
+import { Appointment } from '../appointment/appointment.entity';
+import { AppointmentService } from '../appointment/appointment.service';
+>>>>>>> Stashed changes
 
 @Injectable()
 export class DoctorService {
@@ -116,13 +127,11 @@ export class DoctorService {
         specialization: query.specialization,
       });
     }
-
     if (query.search) {
       qb.andWhere('LOWER(doctor.fullName) LIKE LOWER(:search)', {
         search: `%${query.search}%`,
       });
     }
-
     if (query.availability !== undefined) {
       qb.andWhere('doctor.isAvailable = :availability', {
         availability: query.availability,
@@ -130,7 +139,6 @@ export class DoctorService {
     }
 
     const total = await qb.getCount();
-
     if (total === 0) {
       return {
         success: true,
@@ -141,7 +149,6 @@ export class DoctorService {
     }
 
     const doctors = await qb.skip(skip).take(limit).getMany();
-
     return {
       success: true,
       message: 'Doctors fetched successfully',
@@ -159,7 +166,6 @@ export class DoctorService {
     if (!id.match(/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i)) {
       throw new BadRequestException('Invalid doctor ID format');
     }
-
     const doctor = await this.doctorProfileRepo.findOne({
       where: { id },
       select: {
@@ -177,16 +183,10 @@ export class DoctorService {
         services: true,
       },
     });
-
     if (!doctor) {
       throw new NotFoundException(`Doctor with ID ${id} not found`);
     }
-
-    return {
-      success: true,
-      message: 'Doctor profile fetched successfully',
-      data: doctor,
-    };
+    return { success: true, message: 'Doctor profile fetched successfully', data: doctor };
   }
 }
 
@@ -194,7 +194,10 @@ export class DoctorService {
 @UseGuards(JwtAuthGuard, RolesGuard)
 @Roles(Role.DOCTOR)
 export class DoctorController {
-  constructor(private readonly doctorService: DoctorService) {}
+  constructor(
+    private readonly doctorService: DoctorService,
+    private readonly appointmentService: AppointmentService,
+  ) {}
 
   @Post('profile')
   createProfile(@CurrentUser() user: User, @Body() dto: CreateDoctorProfileDto) {
@@ -220,6 +223,12 @@ export class DoctorController {
   getAllPatients() {
     return this.doctorService.getAllPatients();
   }
+
+  // GET /api/doctor/appointments — Doctor views their appointments
+  @Get('appointments')
+  getDoctorAppointments(@CurrentUser() user: User) {
+    return this.appointmentService.getDoctorAppointments(user);
+  }
 }
 
 @Controller('api/doctor')
@@ -238,8 +247,29 @@ export class DoctorDiscoveryController {
 }
 
 @Module({
+<<<<<<< Updated upstream
   imports: [TypeOrmModule.forFeature([DoctorProfile]), AuthModule],
   controllers: [DoctorController, DoctorDiscoveryController],
   providers: [DoctorService],
+=======
+  imports: [
+    TypeOrmModule.forFeature([
+      DoctorProfile,
+      RecurringAvailability,
+      CustomAvailability,
+      Slot,
+      Appointment,
+      User,
+    ]),
+    AuthModule,
+  ],
+  controllers: [
+    DoctorController,
+    AvailabilityController,
+    SlotController,
+    DoctorDiscoveryController,
+  ],
+  providers: [DoctorService, AvailabilityService, SlotService, AppointmentService],
+>>>>>>> Stashed changes
 })
 export class DoctorModule {}

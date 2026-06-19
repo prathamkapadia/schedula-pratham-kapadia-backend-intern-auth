@@ -4,9 +4,13 @@ import { ConfigModule } from '@nestjs/config';
 import { AuthModule } from './auth/auth.module';
 import { DoctorModule } from './doctor/doctor.module';
 import { PatientModule } from './patient/patient.module';
+import { AppointmentModule } from './appointment/appointment.module';
 import { User } from './auth/user.entity';
 import { DoctorProfile } from './doctor/doctor-profile.entity';
 import { PatientProfile } from './patient/patient-profile.entity';
+import { RecurringAvailability, CustomAvailability } from './doctor/availability.entity';
+import { Slot } from './doctor/slot.entity';
+import { Appointment } from './appointment/appointment.entity';
 
 @Controller()
 class AppController {
@@ -23,8 +27,19 @@ class AppController {
         'PATCH /api/doctor/profile': 'Update doctor profile [DOCTOR only]',
         'GET   /api/doctor/dashboard': 'Doctor dashboard [DOCTOR only]',
         'GET   /api/doctor/patients': 'List all patients [DOCTOR only]',
+        'GET   /api/doctor/appointments': 'Doctor appointments [DOCTOR only]',
         'GET   /api/doctor': 'Discover doctors [PUBLIC]',
         'GET   /api/doctor/:id': 'Doctor profile by ID [PUBLIC]',
+        'GET   /api/doctor/:doctorId/slots': 'Get slots for doctor [PUBLIC]',
+        'POST  /api/doctor/availability': 'Create recurring availability [DOCTOR only]',
+        'GET   /api/doctor/availability': 'Get recurring availability [DOCTOR only]',
+        'PATCH /api/doctor/availability/:id': 'Update recurring slot [DOCTOR only]',
+        'DELETE /api/doctor/availability/:id': 'Delete recurring slot [DOCTOR only]',
+        'POST  /api/doctor/availability/override': 'Create custom override [DOCTOR only]',
+        'GET   /api/doctor/availability/date': 'Get availability by date [DOCTOR only]',
+        'POST  /api/appointment': 'Book appointment [PATIENT only]',
+        'GET   /api/appointment/my': 'My appointments [PATIENT only]',
+        'PATCH /api/appointment/:id/cancel': 'Cancel appointment [PATIENT only]',
         'POST  /api/patient/profile': 'Create patient profile [PATIENT only]',
         'GET   /api/patient/profile': 'Get patient profile [PATIENT only]',
         'PATCH /api/patient/profile': 'Update patient profile [PATIENT only]',
@@ -38,20 +53,27 @@ class AppController {
 @Module({
   imports: [
     ConfigModule.forRoot({ isGlobal: true }),
-   TypeOrmModule.forRootAsync({
-  useFactory: () => ({
-    type: 'postgres',
-url: process.env.DATABASE_URL || 'postgresql://postgres:HAPOMVPRWmZmpnRfPqzGOmwOZeDrRcKa@acela.proxy.rlwy.net:34318/railway',    entities: [User, DoctorProfile, PatientProfile],
-    synchronize: true,
-    ssl: { rejectUnauthorized: false },
-    extra: {
-      connectionString: process.env.DATABASE_URL || 'postgresql://neondb_owner:npg_Ito1md4xQbWk@ep-curly-unit-ao9bv1fi-pooler.c-2.ap-southeast-1.aws.neon.tech/neondb?sslmode=require',
-    },
-  }),
-}),
+    TypeOrmModule.forRootAsync({
+      useFactory: () => ({
+        type: 'postgres',
+        url: process.env.DATABASE_URL,
+        entities: [
+          User,
+          DoctorProfile,
+          PatientProfile,
+          RecurringAvailability,
+          CustomAvailability,
+          Slot,
+          Appointment,
+        ],
+        synchronize: false,
+        ssl: { rejectUnauthorized: false },
+      }),
+    }),
     AuthModule,
     DoctorModule,
     PatientModule,
+    AppointmentModule,
   ],
   controllers: [AppController],
 })
