@@ -58,6 +58,10 @@ export class Appointment {
   })
   status: AppointmentStatus;
 
+  // Only set for WAVE bookings — patient's position in the booking order for that window
+  @Column({ type: 'int', name: 'token_number', nullable: true })
+  tokenNumber: number | null;
+
   @CreateDateColumn({ name: 'created_at' })
   createdAt: Date;
 

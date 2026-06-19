@@ -21,8 +21,6 @@ import { AuthModule } from '../auth/auth.module';
 import { JwtAuthGuard, RolesGuard, Roles, CurrentUser } from '../common/guards/auth.guards';
 import { DoctorProfile } from './doctor-profile.entity';
 import { CreateDoctorProfileDto, UpdateDoctorProfileDto, DoctorQueryDto } from './doctor.dto';
-<<<<<<< Updated upstream
-=======
 import { RecurringAvailability, CustomAvailability } from './availability.entity';
 import { AvailabilityService } from './availability.service';
 import { AvailabilityController } from './availability.controller';
@@ -31,7 +29,6 @@ import { SlotService } from './slot.service';
 import { SlotController } from './slot.controller';
 import { Appointment } from '../appointment/appointment.entity';
 import { AppointmentService } from '../appointment/appointment.service';
->>>>>>> Stashed changes
 
 @Injectable()
 export class DoctorService {
@@ -120,6 +117,10 @@ export class DoctorService {
         'doctor.profilePictureUrl',
         'doctor.achievement',
         'doctor.services',
+        'doctor.slotDuration',
+        'doctor.schedulingType',
+        'doctor.bufferTime',
+        'doctor.maxPatientsPerWave',
       ]);
 
     if (query.specialization) {
@@ -181,6 +182,10 @@ export class DoctorService {
         profilePictureUrl: true,
         achievement: true,
         services: true,
+        slotDuration: true,
+        schedulingType: true,
+        bufferTime: true,
+        maxPatientsPerWave: true,
       },
     });
     if (!doctor) {
@@ -247,11 +252,9 @@ export class DoctorDiscoveryController {
 }
 
 @Module({
-<<<<<<< Updated upstream
   imports: [TypeOrmModule.forFeature([DoctorProfile]), AuthModule],
   controllers: [DoctorController, DoctorDiscoveryController],
   providers: [DoctorService],
-=======
   imports: [
     TypeOrmModule.forFeature([
       DoctorProfile,
@@ -270,6 +273,5 @@ export class DoctorDiscoveryController {
     DoctorDiscoveryController,
   ],
   providers: [DoctorService, AvailabilityService, SlotService, AppointmentService],
->>>>>>> Stashed changes
 })
 export class DoctorModule {}

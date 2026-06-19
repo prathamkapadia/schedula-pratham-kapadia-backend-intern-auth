@@ -8,7 +8,7 @@ import {
 import { InjectRepository } from '@nestjs/typeorm';
 import { Repository, DataSource } from 'typeorm';
 import { User } from '../auth/user.entity';
-import { DoctorProfile } from '../doctor/doctor-profile.entity';
+import { DoctorProfile, SchedulingType } from '../doctor/doctor-profile.entity';
 import { Slot, SlotStatus } from '../doctor/slot.entity';
 import { Appointment, AppointmentStatus } from './appointment.entity';
 import { BookAppointmentDto } from './appointment.dto';
@@ -44,17 +44,13 @@ export class AppointmentService {
     return parts[0] * 60 + parts[1];
   }
 
-  // ─── Book Appointment ─────────────────────────────────────────────────────
-
-  async bookAppointment(patient: User, dto: BookAppointmentDto): Promise<object> {
-    // 1. Validate date format
+  private validateBookingTime(dto: BookAppointmentDto): { year: number; month: number; day: number } {
     if (!/^\d{4}-\d{2}-\d{2}$/.test(dto.date)) {
       throw new BadRequestException(
         `Invalid date format: ${dto.date}. Use YYYY-MM-DD`,
       );
     }
 
-    // 2. Validate date is not in the past
     const [year, month, day] = dto.date.split('-').map(Number);
     const appointmentDate = new Date(year, month - 1, day);
     const today = new Date();
@@ -65,7 +61,6 @@ export class AppointmentService {
       );
     }
 
-    // 3. Validate appointment is not in the past time (if today)
     const now = new Date();
     const isToday =
       now.getFullYear() === year &&
@@ -82,7 +77,14 @@ export class AppointmentService {
       }
     }
 
-    // 4. Check doctor exists
+    return { year, month, day };
+  }
+
+  // ─── Book Appointment ─────────────────────────────────────────────────────
+
+  async bookAppointment(patient: User, dto: BookAppointmentDto): Promise<object> {
+    this.validateBookingTime(dto);
+
     const doctor = await this.doctorProfileRepo.findOne({
       where: { id: dto.doctorId },
     });
@@ -90,7 +92,6 @@ export class AppointmentService {
       throw new NotFoundException(`Doctor with ID ${dto.doctorId} not found`);
     }
 
-    // 5. Find the slot — normalize time for comparison
     const normalizedStart = this.normalizeTime(dto.startTime);
     const normalizedEnd = this.normalizeTime(dto.endTime);
 
@@ -109,14 +110,27 @@ export class AppointmentService {
       );
     }
 
-    // 6. Check slot is available
+    if (doctor.schedulingType === SchedulingType.WAVE) {
+      return this.bookWaveAppointment(patient, doctor, slot);
+    }
+    return this.bookStreamAppointment(patient, doctor, slot, normalizedStart, normalizedEnd);
+  }
+
+  // ─── STREAM booking — exact 1-to-1 slot booking ──────────────────────────
+
+  private async bookStreamAppointment(
+    patient: User,
+    doctor: DoctorProfile,
+    slot: Slot,
+    normalizedStart: string,
+    normalizedEnd: string,
+  ): Promise<object> {
     if (slot.status === SlotStatus.BOOKED) {
       throw new ConflictException(
-        `This slot (${dto.startTime}–${dto.endTime}) is already booked. Please choose another slot`,
+        `This slot (${normalizedStart}–${normalizedEnd}) is already booked. Please choose another slot`,
       );
     }
 
-    // 7. Check patient hasn't already booked same slot
     const existingAppointment = await this.appointmentRepo.findOne({
       where: {
         patientId: patient.id,
@@ -125,25 +139,29 @@ export class AppointmentService {
       },
     });
     if (existingAppointment) {
-      throw new ConflictException(
-        `You have already booked this slot`,
-      );
+      throw new ConflictException(`You have already booked this slot`);
     }
 
-    // 8. Book using transaction — atomic operation
     const appointment = await this.dataSource.transaction(async (manager) => {
-      // Update slot status to BOOKED
+      // Re-check status inside transaction to prevent race condition double-booking
+      const freshSlot = await manager.findOne(Slot, { where: { id: slot.id } });
+      if (!freshSlot || freshSlot.status === SlotStatus.BOOKED) {
+        throw new ConflictException(
+          `This slot was just booked by someone else. Please choose another slot`,
+        );
+      }
+
       await manager.update(Slot, { id: slot.id }, { status: SlotStatus.BOOKED });
 
-      // Create appointment
       const appt = manager.create(Appointment, {
         patientId: patient.id,
-        doctorId: dto.doctorId,
+        doctorId: doctor.id,
         slotId: slot.id,
-        date: dto.date,
+        date: slot.date,
         startTime: normalizedStart,
         endTime: normalizedEnd,
         status: AppointmentStatus.BOOKED,
+        tokenNumber: null,
       });
 
       return await manager.save(Appointment, appt);
@@ -158,6 +176,99 @@ export class AppointmentService {
         startTime: this.normalizeTime(appointment.startTime),
         endTime: this.normalizeTime(appointment.endTime),
         status: appointment.status,
+        schedulingType: SchedulingType.STREAM,
+        doctor: {
+          id: doctor.id,
+          name: doctor.fullName,
+          specialization: doctor.specialization,
+        },
+      },
+    };
+  }
+
+  // ─── WAVE booking — token-based shared window booking ────────────────────
+
+  private async bookWaveAppointment(
+    patient: User,
+    doctor: DoctorProfile,
+    slot: Slot,
+  ): Promise<object> {
+    const maxPatients = slot.maxPatients ?? doctor.maxPatientsPerWave ?? 0;
+
+    if (maxPatients < 1) {
+      throw new BadRequestException(
+        `Doctor has not configured a valid wave capacity`,
+      );
+    }
+
+    // Prevent same patient booking same wave window twice
+    const existingAppointment = await this.appointmentRepo.findOne({
+      where: {
+        patientId: patient.id,
+        slotId: slot.id,
+        status: AppointmentStatus.BOOKED,
+      },
+    });
+    if (existingAppointment) {
+      throw new ConflictException(
+        `You have already booked a token in this wave window`,
+      );
+    }
+
+    const appointment = await this.dataSource.transaction(async (manager) => {
+      // Lock the slot row to safely increment bookedCount under concurrency
+      const freshSlot = await manager
+        .createQueryBuilder(Slot, 'slot')
+        .setLock('pessimistic_write')
+        .where('slot.id = :id', { id: slot.id })
+        .getOne();
+
+      if (!freshSlot) {
+        throw new NotFoundException('Slot not found');
+      }
+
+      if (freshSlot.bookedCount >= maxPatients) {
+        throw new ConflictException(
+          `Wave is full. Maximum ${maxPatients} patients already booked for this window (${this.normalizeTime(freshSlot.startTime)}–${this.normalizeTime(freshSlot.endTime)})`,
+        );
+      }
+
+      const newTokenNumber = freshSlot.bookedCount + 1;
+      const newBookedCount = freshSlot.bookedCount + 1;
+      const newStatus =
+        newBookedCount >= maxPatients ? SlotStatus.BOOKED : SlotStatus.AVAILABLE;
+
+      await manager.update(
+        Slot,
+        { id: freshSlot.id },
+        { bookedCount: newBookedCount, status: newStatus },
+      );
+
+      const appt = manager.create(Appointment, {
+        patientId: patient.id,
+        doctorId: doctor.id,
+        slotId: freshSlot.id,
+        date: freshSlot.date,
+        startTime: this.normalizeTime(freshSlot.startTime),
+        endTime: this.normalizeTime(freshSlot.endTime),
+        status: AppointmentStatus.BOOKED,
+        tokenNumber: newTokenNumber,
+      });
+
+      return await manager.save(Appointment, appt);
+    });
+
+    return {
+      success: true,
+      message: `Appointment booked successfully. Your token number is ${appointment.tokenNumber}`,
+      data: {
+        id: appointment.id,
+        date: appointment.date,
+        startTime: this.normalizeTime(appointment.startTime),
+        endTime: this.normalizeTime(appointment.endTime),
+        status: appointment.status,
+        schedulingType: SchedulingType.WAVE,
+        tokenNumber: appointment.tokenNumber,
         doctor: {
           id: doctor.id,
           name: doctor.fullName,
@@ -176,14 +287,9 @@ export class AppointmentService {
     });
 
     if (appointments.length === 0) {
-      return {
-        success: true,
-        message: 'No appointments found',
-        data: [],
-      };
+      return { success: true, message: 'No appointments found', data: [] };
     }
 
-    // Fetch doctor details for each appointment
     const doctorIds = [...new Set(appointments.map((a) => a.doctorId))];
     const doctors = await this.doctorProfileRepo.findByIds(doctorIds);
     const doctorMap = new Map(doctors.map((d) => [d.id, d]));
@@ -200,6 +306,8 @@ export class AppointmentService {
           startTime: this.normalizeTime(appt.startTime),
           endTime: this.normalizeTime(appt.endTime),
           status: appt.status,
+          schedulingType: doctor?.schedulingType ?? null,
+          tokenNumber: appt.tokenNumber,
           doctor: doctor
             ? {
                 id: doctor.id,
@@ -217,73 +325,64 @@ export class AppointmentService {
   // ─── Patient: Cancel Appointment ──────────────────────────────────────────
 
   async cancelAppointment(patient: User, appointmentId: string): Promise<object> {
-    // 1. Find appointment
     const appointment = await this.appointmentRepo.findOne({
       where: { id: appointmentId },
     });
 
     if (!appointment) {
-      throw new NotFoundException(
-        `Appointment with ID ${appointmentId} not found`,
-      );
+      throw new NotFoundException(`Appointment with ID ${appointmentId} not found`);
     }
 
-    // 2. Only owner can cancel
     if (appointment.patientId !== patient.id) {
-      throw new ForbiddenException(
-        `You are not authorized to cancel this appointment`,
-      );
+      throw new ForbiddenException(`You are not authorized to cancel this appointment`);
     }
 
-    // 3. Cannot cancel already cancelled
     if (appointment.status === AppointmentStatus.CANCELLED) {
-      throw new ConflictException(
-        `Appointment is already cancelled`,
-      );
+      throw new ConflictException(`Appointment is already cancelled`);
     }
 
-    // 4. Cannot cancel past appointment
     const [year, month, day] = appointment.date.split('-').map(Number);
     const appointmentDate = new Date(year, month - 1, day);
     const today = new Date();
     today.setHours(0, 0, 0, 0);
     if (appointmentDate < today) {
-      throw new BadRequestException(
-        `Cannot cancel a past appointment`,
-      );
+      throw new BadRequestException(`Cannot cancel a past appointment`);
     }
 
-    // 5. Cancel using transaction
     await this.dataSource.transaction(async (manager) => {
-      // Update appointment status
       await manager.update(
         Appointment,
         { id: appointmentId },
         { status: AppointmentStatus.CANCELLED },
       );
 
-      // Free up the slot
-      await manager.update(
-        Slot,
-        { id: appointment.slotId },
-        { status: SlotStatus.AVAILABLE },
-      );
+      const slot = await manager.findOne(Slot, { where: { id: appointment.slotId } });
+      if (slot) {
+        if (appointment.tokenNumber !== null) {
+          // WAVE — free up one seat in the window, never go below 0
+          const newBookedCount = Math.max(0, slot.bookedCount - 1);
+          await manager.update(
+            Slot,
+            { id: slot.id },
+            { bookedCount: newBookedCount, status: SlotStatus.AVAILABLE },
+          );
+        } else {
+          // STREAM — slot becomes fully available again
+          await manager.update(Slot, { id: slot.id }, { status: SlotStatus.AVAILABLE });
+        }
+      }
     });
 
     return {
       success: true,
       message: 'Appointment cancelled successfully',
-      data: {
-        id: appointmentId,
-        status: AppointmentStatus.CANCELLED,
-      },
+      data: { id: appointmentId, status: AppointmentStatus.CANCELLED },
     };
   }
 
   // ─── Doctor: View Appointments ────────────────────────────────────────────
 
   async getDoctorAppointments(doctor: User): Promise<object> {
-    // Get doctor profile
     const profile = await this.doctorProfileRepo.findOne({
       where: { userId: doctor.id },
     });
@@ -300,14 +399,9 @@ export class AppointmentService {
     });
 
     if (appointments.length === 0) {
-      return {
-        success: true,
-        message: 'No appointments found',
-        data: [],
-      };
+      return { success: true, message: 'No appointments found', data: [] };
     }
 
-    // Fetch patient details
     const patientIds = [...new Set(appointments.map((a) => a.patientId))];
     const patients = await this.userRepo.findByIds(patientIds);
     const patientMap = new Map(patients.map((p) => [p.id, p]));
@@ -324,12 +418,10 @@ export class AppointmentService {
           startTime: this.normalizeTime(appt.startTime),
           endTime: this.normalizeTime(appt.endTime),
           status: appt.status,
+          schedulingType: profile.schedulingType,
+          tokenNumber: appt.tokenNumber,
           patient: patient
-            ? {
-                id: patient.id,
-                name: patient.name,
-                email: patient.email,
-              }
+            ? { id: patient.id, name: patient.name, email: patient.email }
             : null,
           createdAt: appt.createdAt,
         };
