@@ -65,7 +65,7 @@ class AppController {
   ssl: {
     rejectUnauthorized: false,
   },
-  entities: [User, DoctorProfile, PatientProfile],
+  entities: [User, DoctorProfile, PatientProfile, RecurringAvailability, CustomAvailability],
   synchronize: false,
   migrations: ['dist/migrations/*.js'],
 }),
