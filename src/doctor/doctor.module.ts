@@ -27,8 +27,11 @@ import { AvailabilityController } from './availability.controller';
 import { Slot } from './slot.entity';
 import { SlotService } from './slot.service';
 import { SlotController } from './slot.controller';
+<<<<<<< HEAD
 import { Appointment } from '../appointment/appointment.entity';
 import { AppointmentService } from '../appointment/appointment.service';
+=======
+>>>>>>> 52025d7 (feat: add slot generation system with configurable duration and doctor seed data)
 
 @Injectable()
 export class DoctorService {
@@ -118,9 +121,12 @@ export class DoctorService {
         'doctor.achievement',
         'doctor.services',
         'doctor.slotDuration',
+<<<<<<< HEAD
         'doctor.schedulingType',
         'doctor.bufferTime',
         'doctor.maxPatientsPerWave',
+=======
+>>>>>>> 52025d7 (feat: add slot generation system with configurable duration and doctor seed data)
       ]);
 
     if (query.specialization) {
@@ -154,12 +160,7 @@ export class DoctorService {
       success: true,
       message: 'Doctors fetched successfully',
       data: doctors,
-      pagination: {
-        page,
-        limit,
-        total,
-        totalPages: Math.ceil(total / limit),
-      },
+      pagination: { page, limit, total, totalPages: Math.ceil(total / limit) },
     };
   }
 
@@ -183,9 +184,12 @@ export class DoctorService {
         achievement: true,
         services: true,
         slotDuration: true,
+<<<<<<< HEAD
         schedulingType: true,
         bufferTime: true,
         maxPatientsPerWave: true,
+=======
+>>>>>>> 52025d7 (feat: add slot generation system with configurable duration and doctor seed data)
       },
     });
     if (!doctor) {
@@ -260,9 +264,11 @@ export class DoctorDiscoveryController {
       DoctorProfile,
       RecurringAvailability,
       CustomAvailability,
+      Slot,
     ]),
     AuthModule,
   ],
+<<<<<<< HEAD
   controllers: [DoctorController, DoctorDiscoveryController, AvailabilityController],
   providers: [DoctorService, AvailabilityService],
       Slot,
@@ -278,5 +284,14 @@ export class DoctorDiscoveryController {
     DoctorDiscoveryController,
   ],
   providers: [DoctorService, AvailabilityService, SlotService, AppointmentService],
+=======
+  controllers: [
+    DoctorController,
+    DoctorDiscoveryController,
+    AvailabilityController,
+    SlotController,
+  ],
+  providers: [DoctorService, AvailabilityService, SlotService],
+>>>>>>> 52025d7 (feat: add slot generation system with configurable duration and doctor seed data)
 })
 export class DoctorModule {}

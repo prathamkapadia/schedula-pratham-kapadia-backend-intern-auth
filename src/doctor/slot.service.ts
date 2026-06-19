@@ -6,6 +6,7 @@ import {
 import { InjectRepository } from '@nestjs/typeorm';
 import { Repository } from 'typeorm';
 import { DoctorProfile, SchedulingType } from './doctor-profile.entity';
+import { DoctorProfile } from './doctor-profile.entity';
 import { RecurringAvailability, CustomAvailability, DayOfWeek } from './availability.entity';
 import { Slot, SlotStatus } from './slot.entity';
 
@@ -28,33 +29,45 @@ export class SlotService {
     private readonly recurringRepo: Repository<RecurringAvailability>,
     @InjectRepository(CustomAvailability)
     private readonly customRepo: Repository<CustomAvailability>,
+
+    @InjectRepository(RecurringAvailability)
+    private readonly recurringRepo: Repository<RecurringAvailability>,
+
+    @InjectRepository(CustomAvailability)
+    private readonly customRepo: Repository<CustomAvailability>,
+
     @InjectRepository(Slot)
     private readonly slotRepo: Repository<Slot>,
   ) {}
 
   // ─── Helpers ──────────────────────────────────────────────────────────────
 
+  // Normalize PostgreSQL TIME "10:00:00" → "10:00"
   private normalizeTime(time: string): string {
     if (!time) return time;
     const parts = time.split(':');
     return `${parts[0].padStart(2, '0')}:${parts[1].padStart(2, '0')}`;
   }
 
+  // Convert "HH:MM" to minutes since midnight
   private toMinutes(time: string): number {
     const parts = time.split(':').map(Number);
     return parts[0] * 60 + parts[1];
   }
 
+  // Convert minutes since midnight to "HH:MM"
   private fromMinutes(minutes: number): string {
     const h = Math.floor(minutes / 60);
     const m = minutes % 60;
     return `${String(h).padStart(2, '0')}:${String(m).padStart(2, '0')}`;
   }
 
+  // Validate date format and ensure it's not in the past
   private validateDate(dateStr: string): void {
     if (!dateStr) {
       throw new BadRequestException('date query param is required. e.g. ?date=2026-06-20');
     }
+
     if (!/^\d{4}-\d{2}-\d{2}$/.test(dateStr)) {
       throw new BadRequestException(
         `Invalid date format: ${dateStr}. Use YYYY-MM-DD (e.g. 2026-06-20)`,
@@ -62,6 +75,10 @@ export class SlotService {
     }
     const [year, month, day] = dateStr.split('-').map(Number);
     const date = new Date(year, month - 1, day);
+
+    const [year, month, day] = dateStr.split('-').map(Number);
+    const date = new Date(year, month - 1, day);
+
     if (
       date.getFullYear() !== year ||
       date.getMonth() !== month - 1 ||
@@ -71,6 +88,7 @@ export class SlotService {
         `Invalid date: ${dateStr} does not exist on the calendar`,
       );
     }
+
     const today = new Date();
     today.setHours(0, 0, 0, 0);
     if (date < today) {
@@ -87,6 +105,12 @@ export class SlotService {
     endTime: string,
     slotDuration: number,
     bufferTime: number,
+  // Generate time slots from a window based on slotDuration
+  // e.g. 10:00–12:00 with 30 min → [10:00–10:30, 10:30–11:00, 11:00–11:30, 11:30–12:00]
+  private generateSlotsFromWindow(
+    startTime: string,
+    endTime: string,
+    slotDuration: number,
   ): { startTime: string; endTime: string }[] {
     const slots: { startTime: string; endTime: string }[] = [];
     let current = this.toMinutes(this.normalizeTime(startTime));
@@ -100,6 +124,9 @@ export class SlotService {
       });
       current += step;
     }
+      current += slotDuration;
+    }
+
     return slots;
   }
 
@@ -109,6 +136,14 @@ export class SlotService {
     this.validateDate(dateStr);
 
     const doctor = await this.doctorProfileRepo.findOne({ where: { id: doctorId } });
+    // 1. Validate date
+    this.validateDate(dateStr);
+
+    // 2. Find doctor profile
+    const doctor = await this.doctorProfileRepo.findOne({
+      where: { id: doctorId },
+    });
+
     if (!doctor) {
       throw new NotFoundException(`Doctor with ID ${doctorId} not found`);
     }
@@ -134,6 +169,23 @@ export class SlotService {
     const emergencyBlock = await this.customRepo.findOne({
       where: { doctorId: doctor.id, date: dateStr, isAvailable: false },
     });
+    // 3. Check if slots already exist for this doctor + date
+    const existingSlots = await this.slotRepo.find({
+      where: { doctorId, date: dateStr },
+      order: { startTime: 'ASC' },
+    });
+
+    if (existingSlots.length > 0) {
+      // Slots already generated — just filter and return
+      return this.filterAndReturnSlots(existingSlots, dateStr, doctor);
+    }
+
+    // 4. No existing slots — generate them
+    // Step 4a: Check for emergency block
+    const emergencyBlock = await this.customRepo.findOne({
+      where: { doctorId: doctor.id, date: dateStr, isAvailable: false },
+    });
+
     if (emergencyBlock) {
       return {
         success: true,
@@ -144,6 +196,7 @@ export class SlotService {
         schedulingType: doctor.schedulingType,
         slotDuration: doctor.slotDuration,
         bufferTime: doctor.bufferTime,
+        slotDuration: doctor.slotDuration,
         isAvailable: false,
         reason: emergencyBlock.reason ?? 'Doctor is unavailable on this date',
         slots: [],
@@ -151,6 +204,7 @@ export class SlotService {
     }
 
     // Custom override — regenerate slots from custom window if present
+    // Step 4b: Check custom availability slots for this date
     const customSlots = await this.customRepo.find({
       where: { doctorId: doctor.id, date: dateStr, isAvailable: true },
       order: { startTime: 'ASC' },
@@ -171,6 +225,26 @@ export class SlotService {
       }
 
       if (generatedSlots.length === 0) {
+    let availabilityWindows: { startTime: string; endTime: string }[] = [];
+
+    if (customSlots.length > 0) {
+      // Use custom override
+      availabilityWindows = customSlots.map((s) => ({
+        startTime: s.startTime!,
+        endTime: s.endTime!,
+      }));
+    } else {
+      // Step 4c: Fall back to recurring availability
+      const [year, month, day] = dateStr.split('-').map(Number);
+      const date = new Date(year, month - 1, day);
+      const dayOfWeek = DAY_MAP[date.getDay()];
+
+      const recurringSlots = await this.recurringRepo.find({
+        where: { doctorId: doctor.id, dayOfWeek },
+        order: { startTime: 'ASC' },
+      });
+
+      if (recurringSlots.length === 0) {
         return {
           success: true,
           date: dateStr,
@@ -241,6 +315,26 @@ export class SlotService {
         window.endTime,
         doctor.slotDuration,
         doctor.bufferTime,
+          slotDuration: doctor.slotDuration,
+          isAvailable: false,
+          slots: [],
+          message: `Dr. ${doctor.fullName} has no availability on this day`,
+        };
+      }
+
+      availabilityWindows = recurringSlots.map((s) => ({
+        startTime: s.startTime,
+        endTime: s.endTime,
+      }));
+    }
+
+    // Step 4d: Generate slots from all availability windows
+    const generatedSlots: { startTime: string; endTime: string }[] = [];
+    for (const window of availabilityWindows) {
+      const slots = this.generateSlotsFromWindow(
+        window.startTime,
+        window.endTime,
+        doctor.slotDuration,
       );
       generatedSlots.push(...slots);
     }
@@ -255,12 +349,14 @@ export class SlotService {
         schedulingType: doctor.schedulingType,
         slotDuration: doctor.slotDuration,
         bufferTime: doctor.bufferTime,
+        slotDuration: doctor.slotDuration,
         isAvailable: false,
         slots: [],
         message: 'No slots could be generated from the available time windows',
       };
     }
 
+    // Step 4e: Save generated slots to DB
     const slotEntities = generatedSlots.map((s) =>
       this.slotRepo.create({
         doctorId: doctor.id,
@@ -279,6 +375,18 @@ export class SlotService {
     dateStr: string,
     doctor: DoctorProfile,
     source: string,
+
+    const savedSlots = await this.slotRepo.save(slotEntities);
+
+    // Step 4f: Filter and return
+    return this.filterAndReturnSlots(savedSlots, dateStr, doctor);
+  }
+
+  // Filter out past slots and booked slots, then return
+  private filterAndReturnSlots(
+    slots: Slot[],
+    dateStr: string,
+    doctor: DoctorProfile,
   ): object {
     const now = new Date();
     const [year, month, day] = dateStr.split('-').map(Number);
@@ -290,10 +398,19 @@ export class SlotService {
 
     const availableSlots = slots.filter((slot) => {
       if (slot.status === SlotStatus.BOOKED) return false;
+
+    const currentMinutes = now.getHours() * 60 + now.getMinutes();
+
+    const availableSlots = slots.filter((slot) => {
+      // Filter booked slots
+      if (slot.status === SlotStatus.BOOKED) return false;
+
+      // If today — filter past slots
       if (isToday) {
         const slotStart = this.toMinutes(this.normalizeTime(slot.startTime));
         if (slotStart <= currentMinutes) return false;
       }
+
       return true;
     });
 
@@ -310,6 +427,9 @@ export class SlotService {
         isAvailable: false,
         slots: [],
         source,
+        slotDuration: doctor.slotDuration,
+        isAvailable: false,
+        slots: [],
         message: 'No available slots for this date',
       };
     }
@@ -326,6 +446,9 @@ export class SlotService {
       isAvailable: true,
       totalAvailableSlots: availableSlots.length,
       source,
+      slotDuration: doctor.slotDuration,
+      isAvailable: true,
+      totalAvailableSlots: availableSlots.length,
       slots: availableSlots.map((s) => ({
         id: s.id,
         startTime: this.normalizeTime(s.startTime),

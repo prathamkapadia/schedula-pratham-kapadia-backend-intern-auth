@@ -66,6 +66,7 @@ export class CreateDoctorProfileDto {
   profilePictureUrl?: string;
 
   // Slot duration in minutes — min 10, max 120 — used only for STREAM
+  // Slot duration in minutes — min 10, max 120
   @IsOptional()
   @IsInt()
   @Min(10)
@@ -135,6 +136,7 @@ export class UpdateDoctorProfileDto {
   @IsString()
   profilePictureUrl?: string;
 
+  // Slot duration in minutes — min 10, max 120
   @IsOptional()
   @IsInt()
   @Min(10)
