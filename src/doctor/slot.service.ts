@@ -6,7 +6,6 @@ import {
 import { InjectRepository } from '@nestjs/typeorm';
 import { Repository } from 'typeorm';
 import { DoctorProfile, SchedulingType } from './doctor-profile.entity';
-import { DoctorProfile } from './doctor-profile.entity';
 import { RecurringAvailability, CustomAvailability, DayOfWeek } from './availability.entity';
 import { Slot, SlotStatus } from './slot.entity';
 
@@ -29,40 +28,29 @@ export class SlotService {
     private readonly recurringRepo: Repository<RecurringAvailability>,
     @InjectRepository(CustomAvailability)
     private readonly customRepo: Repository<CustomAvailability>,
-
-    @InjectRepository(RecurringAvailability)
-    private readonly recurringRepo: Repository<RecurringAvailability>,
-
-    @InjectRepository(CustomAvailability)
-    private readonly customRepo: Repository<CustomAvailability>,
-
     @InjectRepository(Slot)
     private readonly slotRepo: Repository<Slot>,
   ) {}
 
   // ─── Helpers ──────────────────────────────────────────────────────────────
 
-  // Normalize PostgreSQL TIME "10:00:00" → "10:00"
   private normalizeTime(time: string): string {
     if (!time) return time;
     const parts = time.split(':');
     return `${parts[0].padStart(2, '0')}:${parts[1].padStart(2, '0')}`;
   }
 
-  // Convert "HH:MM" to minutes since midnight
   private toMinutes(time: string): number {
     const parts = time.split(':').map(Number);
     return parts[0] * 60 + parts[1];
   }
 
-  // Convert minutes since midnight to "HH:MM"
   private fromMinutes(minutes: number): string {
     const h = Math.floor(minutes / 60);
     const m = minutes % 60;
     return `${String(h).padStart(2, '0')}:${String(m).padStart(2, '0')}`;
   }
 
-  // Validate date format and ensure it's not in the past
   private validateDate(dateStr: string): void {
     if (!dateStr) {
       throw new BadRequestException('date query param is required. e.g. ?date=2026-06-20');
@@ -73,8 +61,6 @@ export class SlotService {
         `Invalid date format: ${dateStr}. Use YYYY-MM-DD (e.g. 2026-06-20)`,
       );
     }
-    const [year, month, day] = dateStr.split('-').map(Number);
-    const date = new Date(year, month - 1, day);
 
     const [year, month, day] = dateStr.split('-').map(Number);
     const date = new Date(year, month - 1, day);
@@ -98,32 +84,43 @@ export class SlotService {
     }
   }
 
-  // Generate STREAM slots from a window — applies bufferTime gap between slots
-  // e.g. 10:00-11:00, 15 min slots, 5 min buffer -> 10:00-10:15, 10:20-10:35, 10:40-10:55
   private generateStreamSlotsFromWindow(
     startTime: string,
     endTime: string,
     slotDuration: number,
     bufferTime: number,
-  // Generate time slots from a window based on slotDuration
-  // e.g. 10:00–12:00 with 30 min → [10:00–10:30, 10:30–11:00, 11:00–11:30, 11:30–12:00]
-  private generateSlotsFromWindow(
-    startTime: string,
-    endTime: string,
-    slotDuration: number,
   ): { startTime: string; endTime: string }[] {
     const slots: { startTime: string; endTime: string }[] = [];
+
     let current = this.toMinutes(this.normalizeTime(startTime));
     const end = this.toMinutes(this.normalizeTime(endTime));
-    const step = slotDuration + bufferTime;
 
     while (current + slotDuration <= end) {
       slots.push({
         startTime: this.fromMinutes(current),
         endTime: this.fromMinutes(current + slotDuration),
       });
-      current += step;
+      current += slotDuration + bufferTime;
     }
+
+    return slots;
+  }
+
+  private generateSlotsFromWindow(
+    startTime: string,
+    endTime: string,
+    slotDuration: number,
+  ): { startTime: string; endTime: string }[] {
+    const slots: { startTime: string; endTime: string }[] = [];
+
+    let current = this.toMinutes(this.normalizeTime(startTime));
+    const end = this.toMinutes(this.normalizeTime(endTime));
+
+    while (current + slotDuration <= end) {
+      slots.push({
+        startTime: this.fromMinutes(current),
+        endTime: this.fromMinutes(current + slotDuration),
+      });
       current += slotDuration;
     }
 
@@ -133,16 +130,11 @@ export class SlotService {
   // ─── Main API ─────────────────────────────────────────────────────────────
 
   async getSlotsForDoctor(doctorId: string, dateStr: string): Promise<object> {
-    this.validateDate(dateStr);
-
-    const doctor = await this.doctorProfileRepo.findOne({ where: { id: doctorId } });
     // 1. Validate date
     this.validateDate(dateStr);
 
     // 2. Find doctor profile
-    const doctor = await this.doctorProfileRepo.findOne({
-      where: { id: doctorId },
-    });
+    const doctor = await this.doctorProfileRepo.findOne({ where: { id: doctorId } });
 
     if (!doctor) {
       throw new NotFoundException(`Doctor with ID ${doctorId} not found`);
@@ -165,23 +157,7 @@ export class SlotService {
 
     const doctorId = doctor.id;
 
-    // Emergency block takes priority over everything
-    const emergencyBlock = await this.customRepo.findOne({
-      where: { doctorId: doctor.id, date: dateStr, isAvailable: false },
-    });
-    // 3. Check if slots already exist for this doctor + date
-    const existingSlots = await this.slotRepo.find({
-      where: { doctorId, date: dateStr },
-      order: { startTime: 'ASC' },
-    });
-
-    if (existingSlots.length > 0) {
-      // Slots already generated — just filter and return
-      return this.filterAndReturnSlots(existingSlots, dateStr, doctor);
-    }
-
-    // 4. No existing slots — generate them
-    // Step 4a: Check for emergency block
+    // Step 1: Emergency block takes priority over everything
     const emergencyBlock = await this.customRepo.findOne({
       where: { doctorId: doctor.id, date: dateStr, isAvailable: false },
     });
@@ -196,45 +172,38 @@ export class SlotService {
         schedulingType: doctor.schedulingType,
         slotDuration: doctor.slotDuration,
         bufferTime: doctor.bufferTime,
-        slotDuration: doctor.slotDuration,
         isAvailable: false,
         reason: emergencyBlock.reason ?? 'Doctor is unavailable on this date',
         slots: [],
       };
     }
 
-    // Custom override — regenerate slots from custom window if present
-    // Step 4b: Check custom availability slots for this date
+    // Step 2: Check if slots already exist for this doctor + date
+    const existingSlots = await this.slotRepo.find({
+      where: { doctorId, date: dateStr },
+      order: { startTime: 'ASC' },
+    });
+
+    if (existingSlots.length > 0) {
+      return this.filterAndReturnSlots(existingSlots, dateStr, doctor, 'existing');
+    }
+
+    // Step 3: Determine availability windows (custom override or recurring)
+    let availabilityWindows: { startTime: string; endTime: string }[] = [];
+    let source: string;
+
     const customSlots = await this.customRepo.find({
       where: { doctorId: doctor.id, date: dateStr, isAvailable: true },
       order: { startTime: 'ASC' },
     });
 
     if (customSlots.length > 0) {
-      await this.slotRepo.delete({ doctorId: doctor.id, date: dateStr });
-
-      const generatedSlots: { startTime: string; endTime: string }[] = [];
-      for (const window of customSlots) {
-        const slots = this.generateStreamSlotsFromWindow(
-          window.startTime!,
-          window.endTime!,
-          doctor.slotDuration,
-          doctor.bufferTime,
-        );
-        generatedSlots.push(...slots);
-      }
-
-      if (generatedSlots.length === 0) {
-    let availabilityWindows: { startTime: string; endTime: string }[] = [];
-
-    if (customSlots.length > 0) {
-      // Use custom override
       availabilityWindows = customSlots.map((s) => ({
         startTime: s.startTime!,
         endTime: s.endTime!,
       }));
+      source = 'custom_override';
     } else {
-      // Step 4c: Fall back to recurring availability
       const [year, month, day] = dateStr.split('-').map(Number);
       const date = new Date(year, month - 1, day);
       const dayOfWeek = DAY_MAP[date.getDay()];
@@ -256,68 +225,6 @@ export class SlotService {
           bufferTime: doctor.bufferTime,
           isAvailable: false,
           slots: [],
-          message: 'No slots could be generated from custom availability',
-        };
-      }
-
-      const slotEntities = generatedSlots.map((s) =>
-        this.slotRepo.create({
-          doctorId: doctor.id,
-          date: dateStr,
-          startTime: s.startTime,
-          endTime: s.endTime,
-          status: SlotStatus.AVAILABLE,
-        }),
-      );
-      const savedSlots = await this.slotRepo.save(slotEntities);
-      return this.filterAndReturnStreamSlots(savedSlots, dateStr, doctor, 'custom_override');
-    }
-
-    // Already-generated slots for this date (recurring based)
-    const existingSlots = await this.slotRepo.find({
-      where: { doctorId, date: dateStr },
-      order: { startTime: 'ASC' },
-    });
-    if (existingSlots.length > 0) {
-      return this.filterAndReturnStreamSlots(existingSlots, dateStr, doctor, 'recurring');
-    }
-
-    // Generate from recurring availability
-    const [year, month, day] = dateStr.split('-').map(Number);
-    const date = new Date(year, month - 1, day);
-    const dayOfWeek = DAY_MAP[date.getDay()];
-
-    const recurringSlots = await this.recurringRepo.find({
-      where: { doctorId: doctor.id, dayOfWeek },
-      order: { startTime: 'ASC' },
-    });
-
-    if (recurringSlots.length === 0) {
-      return {
-        success: true,
-        date: dateStr,
-        doctorId,
-        doctorName: doctor.fullName,
-        specialization: doctor.specialization,
-        schedulingType: doctor.schedulingType,
-        slotDuration: doctor.slotDuration,
-        bufferTime: doctor.bufferTime,
-        isAvailable: false,
-        slots: [],
-        message: `Dr. ${doctor.fullName} has no availability on this day`,
-      };
-    }
-
-    const generatedSlots: { startTime: string; endTime: string }[] = [];
-    for (const window of recurringSlots) {
-      const slots = this.generateStreamSlotsFromWindow(
-        window.startTime,
-        window.endTime,
-        doctor.slotDuration,
-        doctor.bufferTime,
-          slotDuration: doctor.slotDuration,
-          isAvailable: false,
-          slots: [],
           message: `Dr. ${doctor.fullName} has no availability on this day`,
         };
       }
@@ -326,15 +233,17 @@ export class SlotService {
         startTime: s.startTime,
         endTime: s.endTime,
       }));
+      source = 'recurring';
     }
 
-    // Step 4d: Generate slots from all availability windows
+    // Step 4: Generate slots from all availability windows
     const generatedSlots: { startTime: string; endTime: string }[] = [];
     for (const window of availabilityWindows) {
-      const slots = this.generateSlotsFromWindow(
+      const slots = this.generateStreamSlotsFromWindow(
         window.startTime,
         window.endTime,
         doctor.slotDuration,
+        doctor.bufferTime,
       );
       generatedSlots.push(...slots);
     }
@@ -349,14 +258,13 @@ export class SlotService {
         schedulingType: doctor.schedulingType,
         slotDuration: doctor.slotDuration,
         bufferTime: doctor.bufferTime,
-        slotDuration: doctor.slotDuration,
         isAvailable: false,
         slots: [],
         message: 'No slots could be generated from the available time windows',
       };
     }
 
-    // Step 4e: Save generated slots to DB
+    // Step 5: Save generated slots to DB
     const slotEntities = generatedSlots.map((s) =>
       this.slotRepo.create({
         doctorId: doctor.id,
@@ -367,26 +275,16 @@ export class SlotService {
       }),
     );
     const savedSlots = await this.slotRepo.save(slotEntities);
-    return this.filterAndReturnStreamSlots(savedSlots, dateStr, doctor, 'recurring');
+    return this.filterAndReturnSlots(savedSlots, dateStr, doctor, source);
   }
 
-  private filterAndReturnStreamSlots(
-    slots: Slot[],
-    dateStr: string,
-    doctor: DoctorProfile,
-    source: string,
+  // ─── Shared stream slot filter + return ───────────────────────────────────
 
-    const savedSlots = await this.slotRepo.save(slotEntities);
-
-    // Step 4f: Filter and return
-    return this.filterAndReturnSlots(savedSlots, dateStr, doctor);
-  }
-
-  // Filter out past slots and booked slots, then return
   private filterAndReturnSlots(
     slots: Slot[],
     dateStr: string,
     doctor: DoctorProfile,
+    source: string,
   ): object {
     const now = new Date();
     const [year, month, day] = dateStr.split('-').map(Number);
@@ -399,13 +297,6 @@ export class SlotService {
     const availableSlots = slots.filter((slot) => {
       if (slot.status === SlotStatus.BOOKED) return false;
 
-    const currentMinutes = now.getHours() * 60 + now.getMinutes();
-
-    const availableSlots = slots.filter((slot) => {
-      // Filter booked slots
-      if (slot.status === SlotStatus.BOOKED) return false;
-
-      // If today — filter past slots
       if (isToday) {
         const slotStart = this.toMinutes(this.normalizeTime(slot.startTime));
         if (slotStart <= currentMinutes) return false;
@@ -427,9 +318,6 @@ export class SlotService {
         isAvailable: false,
         slots: [],
         source,
-        slotDuration: doctor.slotDuration,
-        isAvailable: false,
-        slots: [],
         message: 'No available slots for this date',
       };
     }
@@ -446,9 +334,6 @@ export class SlotService {
       isAvailable: true,
       totalAvailableSlots: availableSlots.length,
       source,
-      slotDuration: doctor.slotDuration,
-      isAvailable: true,
-      totalAvailableSlots: availableSlots.length,
       slots: availableSlots.map((s) => ({
         id: s.id,
         startTime: this.normalizeTime(s.startTime),
@@ -488,7 +373,7 @@ export class SlotService {
       };
     }
 
-    // Custom override — regenerate wave windows from custom availability
+    // Custom override
     const customSlots = await this.customRepo.find({
       where: { doctorId: doctor.id, date: dateStr, isAvailable: true },
       order: { startTime: 'ASC' },
@@ -521,7 +406,7 @@ export class SlotService {
       return this.filterAndReturnWaveSlots(existingSlots, dateStr, doctor, 'recurring');
     }
 
-    // Generate wave windows directly from recurring availability (no splitting)
+    // Generate from recurring availability
     const [year, month, day] = dateStr.split('-').map(Number);
     const date = new Date(year, month - 1, day);
     const dayOfWeek = DAY_MAP[date.getDay()];
@@ -575,7 +460,6 @@ export class SlotService {
       now.getDate() === day;
     const currentMinutes = now.getHours() * 60 + now.getMinutes();
 
-    // For wave windows, only filter out windows that have fully ended (if today)
     const availableWindows = slots.filter((slot) => {
       if (isToday) {
         const windowEnd = this.toMinutes(this.normalizeTime(slot.endTime));

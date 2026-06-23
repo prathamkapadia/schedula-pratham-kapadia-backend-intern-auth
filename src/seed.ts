@@ -1,19 +1,11 @@
 import 'reflect-metadata';
 import { AppDataSource } from './data-source';
 import { User, Role } from './auth/user.entity';
-<<<<<<< HEAD
 import { DoctorProfile, SchedulingType } from './doctor/doctor-profile.entity';
 import { RecurringAvailability, DayOfWeek } from './doctor/availability.entity';
 import * as bcrypt from 'bcrypt';
 
-const doctors: any[] = [
-=======
-import { DoctorProfile } from './doctor/doctor-profile.entity';
-import { RecurringAvailability, DayOfWeek } from './doctor/availability.entity';
-import * as bcrypt from 'bcrypt';
-
 const doctors = [
->>>>>>> 52025d7 (feat: add slot generation system with configurable duration and doctor seed data)
   {
     name: 'Dr. Rahul Kumar',
     email: 'rahul@test.com',
@@ -22,12 +14,9 @@ const doctors = [
     qualification: 'MBBS, MD',
     consultationFee: 500,
     slotDuration: 45,
-<<<<<<< HEAD
     schedulingType: SchedulingType.STREAM,
     bufferTime: 0,
     maxPatientsPerWave: null,
-=======
->>>>>>> 52025d7 (feat: add slot generation system with configurable duration and doctor seed data)
     bio: 'Experienced cardiologist',
     achievement: 'Gold Medalist',
     services: ['Heart Checkup', 'ECG', 'Consultation'],
@@ -44,12 +33,9 @@ const doctors = [
     qualification: 'MBBS, MS',
     consultationFee: 700,
     slotDuration: 60,
-<<<<<<< HEAD
     schedulingType: SchedulingType.STREAM,
     bufferTime: 0,
     maxPatientsPerWave: null,
-=======
->>>>>>> 52025d7 (feat: add slot generation system with configurable duration and doctor seed data)
     bio: 'Senior gynaecologist',
     achievement: 'Gold Medalist',
     services: ['Pregnancy', 'New Born', 'New Mother'],
@@ -66,12 +52,9 @@ const doctors = [
     qualification: 'MBBS, DM',
     consultationFee: 600,
     slotDuration: 45,
-<<<<<<< HEAD
     schedulingType: SchedulingType.STREAM,
     bufferTime: 0,
     maxPatientsPerWave: null,
-=======
->>>>>>> 52025d7 (feat: add slot generation system with configurable duration and doctor seed data)
     bio: 'Neurologist specialist',
     achievement: 'Best Doctor 2023',
     services: ['Headache', 'Epilepsy', 'Stroke'],
@@ -88,12 +71,9 @@ const doctors = [
     qualification: 'MBBS, MD Dermatology',
     consultationFee: 800,
     slotDuration: 30,
-<<<<<<< HEAD
     schedulingType: SchedulingType.STREAM,
     bufferTime: 0,
     maxPatientsPerWave: null,
-=======
->>>>>>> 52025d7 (feat: add slot generation system with configurable duration and doctor seed data)
     bio: 'Expert in skin, hair and nail conditions.',
     achievement: 'Best Dermatologist Award 2023',
     services: ['Acne Treatment', 'Hair Loss', 'Skin Allergy'],
@@ -111,12 +91,9 @@ const doctors = [
     qualification: 'MBBS',
     consultationFee: 400,
     slotDuration: 15,
-<<<<<<< HEAD
     schedulingType: SchedulingType.STREAM,
     bufferTime: 0,
     maxPatientsPerWave: null,
-=======
->>>>>>> 52025d7 (feat: add slot generation system with configurable duration and doctor seed data)
     bio: 'General health consultations and preventive care.',
     achievement: '',
     services: ['Fever', 'Cold & Cough', 'General Checkup'],
@@ -137,12 +114,9 @@ const doctors = [
     qualification: 'MBBS, MD, DM Cardiology',
     consultationFee: 1500,
     slotDuration: 45,
-<<<<<<< HEAD
     schedulingType: SchedulingType.STREAM,
     bufferTime: 0,
     maxPatientsPerWave: null,
-=======
->>>>>>> 52025d7 (feat: add slot generation system with configurable duration and doctor seed data)
     bio: 'Heart specialist with 15 years experience.',
     achievement: 'Fellow of Cardiology Society of India',
     services: ['ECG', 'Heart Checkup', 'Hypertension'],
@@ -160,12 +134,9 @@ const doctors = [
     qualification: 'MBBS, MD Paediatrics',
     consultationFee: 600,
     slotDuration: 20,
-<<<<<<< HEAD
     schedulingType: SchedulingType.STREAM,
     bufferTime: 0,
     maxPatientsPerWave: null,
-=======
->>>>>>> 52025d7 (feat: add slot generation system with configurable duration and doctor seed data)
     bio: 'Child health specialist.',
     achievement: '',
     services: ['Child Vaccination', 'Growth Monitoring', 'Child Nutrition'],
@@ -184,12 +155,9 @@ const doctors = [
     qualification: 'MBBS, MS Orthopaedics',
     consultationFee: 900,
     slotDuration: 30,
-<<<<<<< HEAD
     schedulingType: SchedulingType.STREAM,
     bufferTime: 0,
     maxPatientsPerWave: null,
-=======
->>>>>>> 52025d7 (feat: add slot generation system with configurable duration and doctor seed data)
     bio: 'Bone, joint and muscle specialist.',
     achievement: 'Best Orthopaedic Surgeon 2021',
     services: ['Fracture Care', 'Joint Pain', 'Sports Injury'],
@@ -207,12 +175,9 @@ const doctors = [
     qualification: 'MBBS, MD Psychiatry',
     consultationFee: 1000,
     slotDuration: 60,
-<<<<<<< HEAD
     schedulingType: SchedulingType.STREAM,
     bufferTime: 0,
     maxPatientsPerWave: null,
-=======
->>>>>>> 52025d7 (feat: add slot generation system with configurable duration and doctor seed data)
     bio: 'Mental health and wellness specialist.',
     achievement: '',
     services: ['Anxiety', 'Depression', 'Stress Management'],
@@ -230,12 +195,9 @@ const doctors = [
     qualification: 'MBBS, MS Ophthalmology',
     consultationFee: 700,
     slotDuration: 15,
-<<<<<<< HEAD
     schedulingType: SchedulingType.STREAM,
     bufferTime: 0,
     maxPatientsPerWave: null,
-=======
->>>>>>> 52025d7 (feat: add slot generation system with configurable duration and doctor seed data)
     bio: 'Eye care and vision specialist.',
     achievement: '',
     services: ['Eye Test', 'Cataract', 'Glaucoma'],
@@ -254,12 +216,9 @@ const doctors = [
     qualification: 'MBBS, MS ENT',
     consultationFee: 500,
     slotDuration: 20,
-<<<<<<< HEAD
     schedulingType: SchedulingType.STREAM,
     bufferTime: 0,
     maxPatientsPerWave: null,
-=======
->>>>>>> 52025d7 (feat: add slot generation system with configurable duration and doctor seed data)
     bio: 'Ear, nose and throat specialist.',
     achievement: '',
     services: ['Hearing Loss', 'Sinusitis', 'Tonsillitis'],
@@ -269,9 +228,8 @@ const doctors = [
       { day: DayOfWeek.SATURDAY, startTime: '11:00', endTime: '15:00' },
     ],
   },
-<<<<<<< HEAD
 
-  // ── Day 9: Advanced scheduling demo doctors ──────────────────────────
+  // ── Advanced scheduling demo doctors ──────────────────────────────────────
 
   {
     name: 'Dr. Wave OPD',
@@ -364,8 +322,6 @@ const doctors = [
       { day: DayOfWeek.WEDNESDAY, startTime: '10:00', endTime: '12:00' },
     ],
   },
-=======
->>>>>>> 52025d7 (feat: add slot generation system with configurable duration and doctor seed data)
 ];
 
 async function seed() {
@@ -402,12 +358,9 @@ async function seed() {
     profile.qualification = doc.qualification;
     profile.consultationFee = doc.consultationFee;
     profile.slotDuration = doc.slotDuration;
-<<<<<<< HEAD
     profile.schedulingType = doc.schedulingType;
     profile.bufferTime = doc.bufferTime;
     profile.maxPatientsPerWave = doc.maxPatientsPerWave;
-=======
->>>>>>> 52025d7 (feat: add slot generation system with configurable duration and doctor seed data)
     profile.bio = doc.bio;
     profile.achievement = doc.achievement;
     profile.services = doc.services;
@@ -425,16 +378,12 @@ async function seed() {
       await recurringRepo.save(recurring);
     }
 
-<<<<<<< HEAD
     const typeLabel =
       doc.schedulingType === SchedulingType.WAVE
         ? `WAVE, max ${doc.maxPatientsPerWave}/window`
         : `STREAM, ${doc.slotDuration} min${doc.bufferTime ? ` + ${doc.bufferTime} min buffer` : ''}`;
 
     console.log(`✅ ${doc.name} (${doc.specialization}) — ${typeLabel}`);
-=======
-    console.log(`✅ ${doc.name} (${doc.specialization}) — ${doc.slotDuration} min slots`);
->>>>>>> 52025d7 (feat: add slot generation system with configurable duration and doctor seed data)
   }
 
   console.log('\n🎉 Seed complete!');

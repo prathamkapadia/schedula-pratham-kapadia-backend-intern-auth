@@ -650,16 +650,37 @@ export class AppointmentService {
 
   // ─── Doctor: View Appointments ────────────────────────────────────────────
 
-  async getDoctorAppointments(doctor: User): Promise<object> {
+  async getDoctorAppointments(
+  doctor: User,
+  date?: string,
+): Promise<object> {
     const profile = await this.doctorProfileRepo.findOne({ where: { userId: doctor.id } });
     if (!profile) {
       throw new NotFoundException('Doctor profile not found. Please complete onboarding first.');
     }
 
-    const appointments = await this.appointmentRepo.find({
-      where: { doctorId: profile.id },
-      order: { date: 'ASC', startTime: 'ASC' },
-    });
+    const where: any = {
+  doctorId: profile.id,
+  status: AppointmentStatus.BOOKED,
+};
+
+if (date) {
+  if (!/^\d{4}-\d{2}-\d{2}$/.test(date)) {
+    throw new BadRequestException(
+      'Invalid date format. Use YYYY-MM-DD',
+    );
+  }
+
+  where.date = date;
+}
+
+const appointments = await this.appointmentRepo.find({
+  where,
+  order: {
+    date: 'ASC',
+    startTime: 'ASC',
+  },
+});
 
     if (appointments.length === 0) {
       return { success: true, message: 'No appointments found', data: [] };
@@ -688,6 +709,57 @@ export class AppointmentService {
           createdAt: appt.createdAt,
         };
       }),
+    };
+  }
+  async cancelAppointmentByDoctor(
+    doctor: User,
+    appointmentId: string,
+  ): Promise<object> {
+    const profile = await this.doctorProfileRepo.findOne({ where: { userId: doctor.id } });
+    if (!profile) {
+      throw new NotFoundException('Doctor profile not found. Please complete onboarding first.');
+    }
+
+    const appointment = await this.appointmentRepo.findOne({ where: { id: appointmentId } });
+
+    if (!appointment) {
+      throw new NotFoundException(`Appointment with ID ${appointmentId} not found`);
+    }
+    if (appointment.doctorId !== profile.id) {
+      throw new ForbiddenException(`You are not authorized to cancel this appointment`);
+    }
+    if (appointment.status === AppointmentStatus.CANCELLED) {
+      throw new ConflictException(`Appointment is already cancelled`);
+    }
+    if (appointment.status === AppointmentStatus.RESCHEDULED) {
+      throw new BadRequestException(`This appointment has been rescheduled. Cancel the new appointment instead`);
+    }
+
+    const [year, month, day] = appointment.date.split('-').map(Number);
+    const appointmentDate = new Date(year, month - 1, day);
+    const today = new Date();
+    today.setHours(0, 0, 0, 0);
+    if (appointmentDate < today) {
+      throw new BadRequestException(`Cannot cancel a past appointment`);
+    }
+
+    await this.dataSource.transaction(async (manager) => {
+      await manager.update(Appointment, { id: appointmentId }, { status: AppointmentStatus.CANCELLED });
+      const slot = await manager.findOne(Slot, { where: { id: appointment.slotId } });
+      if (slot) {
+        if (appointment.tokenNumber !== null) {
+          const newBookedCount = Math.max(0, slot.bookedCount - 1);
+          await manager.update(Slot, { id: slot.id }, { bookedCount: newBookedCount, status: SlotStatus.AVAILABLE });
+        } else {
+          await manager.update(Slot, { id: slot.id }, { status: SlotStatus.AVAILABLE });
+        }
+      }
+    });
+
+    return {
+      success: true,
+      message: 'Appointment cancelled successfully',
+      data: { id: appointmentId, status: AppointmentStatus.CANCELLED },
     };
   }
 }

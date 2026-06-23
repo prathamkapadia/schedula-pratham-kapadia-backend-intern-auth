@@ -31,11 +31,7 @@ class AppController {
         'GET /api/doctor/:id': 'Doctor profile by ID [PUBLIC]',
         'POST /api/patient/profile': 'Create patient profile [PATIENT only]',
         'GET /api/patient/profile': 'Get patient profile [PATIENT only]',
-        'GET   /api/doctor/dashboard': 'Doctor dashboard [DOCTOR only]',
-        'GET   /api/doctor/patients': 'List all patients [DOCTOR only]',
         'GET   /api/doctor/appointments': 'Doctor appointments [DOCTOR only]',
-        'GET   /api/doctor': 'Discover doctors [PUBLIC]',
-        'GET   /api/doctor/:id': 'Doctor profile by ID [PUBLIC]',
         'GET   /api/doctor/:doctorId/slots': 'Get slots for doctor [PUBLIC]',
         'POST  /api/doctor/availability': 'Create recurring availability [DOCTOR only]',
         'GET   /api/doctor/availability': 'Get recurring availability [DOCTOR only]',
@@ -46,8 +42,7 @@ class AppController {
         'POST  /api/appointment': 'Book appointment [PATIENT only]',
         'GET   /api/appointment/my': 'My appointments [PATIENT only]',
         'PATCH /api/appointment/:id/cancel': 'Cancel appointment [PATIENT only]',
-        'POST  /api/patient/profile': 'Create patient profile [PATIENT only]',
-        'GET   /api/patient/profile': 'Get patient profile [PATIENT only]',
+        'PATCH /api/doctor/appointments/:id/cancel': 'Cancel appointment [DOCTOR only]',
         'PATCH /api/patient/profile': 'Update patient profile [PATIENT only]',
         'GET /api/patient/dashboard': 'Patient dashboard [PATIENT only]',
         'GET /api/patient/doctors': 'List available doctors [PATIENT only]',
@@ -59,16 +54,6 @@ class AppController {
 @Module({
   imports: [
     ConfigModule.forRoot({ isGlobal: true }),
-   TypeOrmModule.forRoot({
-  type: 'postgres',
-  url: process.env.DATABASE_URL,
-  ssl: {
-    rejectUnauthorized: false,
-  },
-  entities: [User, DoctorProfile, PatientProfile, RecurringAvailability, CustomAvailability],
-  synchronize: false,
-  migrations: ['dist/migrations/*.js'],
-}),
     TypeOrmModule.forRootAsync({
       useFactory: () => ({
         type: 'postgres',
