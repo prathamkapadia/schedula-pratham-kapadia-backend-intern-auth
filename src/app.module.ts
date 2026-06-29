@@ -5,12 +5,14 @@ import { AuthModule } from './auth/auth.module';
 import { DoctorModule } from './doctor/doctor.module';
 import { PatientModule } from './patient/patient.module';
 import { AppointmentModule } from './appointment/appointment.module';
+import { NotificationModule } from './notification/notification.module';
 import { User } from './auth/user.entity';
 import { DoctorProfile } from './doctor/doctor-profile.entity';
 import { PatientProfile } from './patient/patient-profile.entity';
 import { RecurringAvailability, CustomAvailability } from './doctor/availability.entity';
 import { Slot } from './doctor/slot.entity';
 import { Appointment } from './appointment/appointment.entity';
+import { Notification } from './notification/notification.entity';
 
 @Controller()
 class AppController {
@@ -43,6 +45,10 @@ class AppController {
         'GET   /api/appointment/my': 'My appointments [PATIENT only]',
         'PATCH /api/appointment/:id/cancel': 'Cancel appointment [PATIENT only]',
         'PATCH /api/appointment/:id/reschedule': 'Reschedule appointment [PATIENT only]',
+        'GET   /notifications': 'Get notifications [PATIENT only]',
+        'GET   /notifications/unread-count': 'Unread count [PATIENT only]',
+        'PATCH /notifications/:id/read': 'Mark one as read [PATIENT only]',
+        'PATCH /notifications/read-all': 'Mark all as read [PATIENT only]',
         'POST /api/patient/profile': 'Create patient profile [PATIENT only]',
         'GET /api/patient/profile': 'Get patient profile [PATIENT only]',
         'PATCH /api/patient/profile': 'Update patient profile [PATIENT only]',
@@ -68,6 +74,7 @@ class AppController {
           CustomAvailability,
           Slot,
           Appointment,
+          Notification,
         ],
         synchronize: false,
         ssl: { rejectUnauthorized: false },
@@ -77,6 +84,7 @@ class AppController {
     DoctorModule,
     PatientModule,
     AppointmentModule,
+    NotificationModule,
   ],
   controllers: [AppController],
 })
