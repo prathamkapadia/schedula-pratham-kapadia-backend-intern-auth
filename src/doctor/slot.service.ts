@@ -19,6 +19,9 @@ const DAY_MAP: Record<number, DayOfWeek> = {
   6: DayOfWeek.SATURDAY,
 };
 
+// Maximum calendar days to search ahead for next available slot (Day 13)
+const MAX_SEARCH_DAYS = 30;
+
 @Injectable()
 export class SlotService {
   constructor(
@@ -49,6 +52,17 @@ export class SlotService {
     const h = Math.floor(minutes / 60);
     const m = minutes % 60;
     return `${String(h).padStart(2, '0')}:${String(m).padStart(2, '0')}`;
+  }
+
+  /** Returns YYYY-MM-DD for today + offsetDays calendar days (Day 13) */
+  private offsetDate(offsetDays: number): string {
+    const d = new Date();
+    d.setHours(0, 0, 0, 0);
+    d.setDate(d.getDate() + offsetDays);
+    const yyyy = d.getFullYear();
+    const mm = String(d.getMonth() + 1).padStart(2, '0');
+    const dd = String(d.getDate()).padStart(2, '0');
+    return `${yyyy}-${mm}-${dd}`;
   }
 
   private validateDate(dateStr: string): void {
@@ -127,7 +141,7 @@ export class SlotService {
     return slots;
   }
 
-  // ─── Main API ─────────────────────────────────────────────────────────────
+  // ─── Main public API ──────────────────────────────────────────────────────
 
   async getSlotsForDoctor(doctorId: string, dateStr: string): Promise<object> {
     // 1. Validate date
@@ -503,6 +517,152 @@ export class SlotService {
         available: (s.maxPatients ?? 0) - s.bookedCount,
         isFull: s.bookedCount >= (s.maxPatients ?? 0),
       })),
+    };
+  }
+
+  // ─── Day 13: Find Next Available Appointment ───────────────────────────────
+
+  /**
+   * Internal helper — calls the correct scheduling strategy for a date
+   * and returns only whether availability was found plus the resolved data.
+   *
+   * By delegating to getStreamSlots / getWaveSlots we get:
+   * - Emergency block checks for free
+   * - Past-time filtering for today for free
+   * - Slot generation + DB persistence for free
+   * - Wave capacity checks for free
+   *
+   * The cast to `any` is intentional: both private methods return `object`
+   * but always include `isAvailable: boolean` in their shape.
+   */
+  private async peekDayAvailability(
+    doctor: DoctorProfile,
+    dateStr: string,
+  ): Promise<{ isAvailable: boolean; data: any }> {
+    let result: any;
+
+    if (doctor.schedulingType === SchedulingType.WAVE) {
+      result = await this.getWaveSlots(doctor, dateStr);
+    } else {
+      result = await this.getStreamSlots(doctor, dateStr);
+    }
+
+    return { isAvailable: result.isAvailable === true, data: result };
+  }
+
+  /**
+   * GET /api/doctor/:doctorId/next-available
+   *
+   * Searches forward from today for the earliest date that has at least one
+   * available slot (STREAM) or at least one non-full wave window (WAVE).
+   *
+   * Search window: up to MAX_SEARCH_DAYS (30) calendar days.
+   * Non-working days and emergency blocks are skipped automatically because
+   * peekDayAvailability delegates to the same logic getStreamSlots /
+   * getWaveSlots already apply.
+   */
+  async findNextAvailable(doctorId: string): Promise<object> {
+    // 1. Validate UUID format
+    if (!/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(doctorId)) {
+      throw new BadRequestException('Invalid doctor ID format');
+    }
+
+    // 2. Load doctor
+    const doctor = await this.doctorProfileRepo.findOne({ where: { id: doctorId } });
+    if (!doctor) {
+      throw new NotFoundException(`Doctor with ID ${doctorId} not found`);
+    }
+
+    // 3. Doctor globally unavailable
+    if (!doctor.isAvailable) {
+      return {
+        success: false,
+        message: `Dr. ${doctor.fullName} is currently not accepting appointments`,
+        doctorId: doctor.id,
+        doctorName: doctor.fullName,
+        specialization: doctor.specialization,
+        schedulingType: doctor.schedulingType,
+      };
+    }
+
+    // 4. Validate scheduling config before wasting 30 loop iterations
+    if (doctor.schedulingType === SchedulingType.WAVE) {
+      if (!doctor.maxPatientsPerWave || doctor.maxPatientsPerWave < 1) {
+        throw new BadRequestException(
+          `Dr. ${doctor.fullName} has not configured maxPatientsPerWave. Please contact the clinic.`,
+        );
+      }
+    } else {
+      if (!doctor.slotDuration || doctor.slotDuration < 10) {
+        throw new BadRequestException(
+          `Dr. ${doctor.fullName} has not configured a valid slot duration. Please contact the clinic.`,
+        );
+      }
+    }
+
+    // 5. Search loop — offset 0 = today
+    for (let offset = 0; offset < MAX_SEARCH_DAYS; offset++) {
+      const dateStr = this.offsetDate(offset);
+
+      let peek: { isAvailable: boolean; data: any };
+      try {
+        peek = await this.peekDayAvailability(doctor, dateStr);
+      } catch {
+        // Unexpected error on one date — skip it, don't abort the search
+        continue;
+      }
+
+      if (!peek.isAvailable) continue;
+
+      // Found availability — build response
+      const isToday = offset === 0;
+      const isStream = doctor.schedulingType !== SchedulingType.WAVE;
+
+      return {
+        success: true,
+        message: isToday
+          ? `Slots available today (${dateStr})`
+          : `Next available appointment is on ${dateStr}`,
+        searchedDays: offset + 1,
+        foundOnDay: isToday ? 'today' : dateStr,
+        doctor: {
+          id: doctor.id,
+          name: doctor.fullName,
+          specialization: doctor.specialization,
+          schedulingType: doctor.schedulingType,
+          consultationFee: doctor.consultationFee,
+          ...(isStream
+            ? { slotDuration: doctor.slotDuration, bufferTime: doctor.bufferTime }
+            : { maxPatientsPerWave: doctor.maxPatientsPerWave }),
+        },
+        availability: {
+          date: dateStr,
+          ...(isStream
+            ? {
+                totalAvailableSlots: peek.data.totalAvailableSlots,
+                slots: peek.data.slots,
+              }
+            : {
+                windows: peek.data.windows,
+              }),
+        },
+        hint: 'Use POST /api/appointment to complete your booking',
+      };
+    }
+
+    // 6. Nothing found in window
+    return {
+      success: false,
+      message: `No appointments available for Dr. ${doctor.fullName} in the next ${MAX_SEARCH_DAYS} days. Please try again later.`,
+      doctorId: doctor.id,
+      doctorName: doctor.fullName,
+      specialization: doctor.specialization,
+      schedulingType: doctor.schedulingType,
+      searchedDays: MAX_SEARCH_DAYS,
+      searchWindow: {
+        from: this.offsetDate(0),
+        to: this.offsetDate(MAX_SEARCH_DAYS - 1),
+      },
     };
   }
 }

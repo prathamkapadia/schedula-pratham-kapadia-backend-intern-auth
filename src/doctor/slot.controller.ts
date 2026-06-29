@@ -14,4 +14,12 @@ export class SlotController {
   ) {
     return this.slotService.getSlotsForDoctor(doctorId, date);
   }
+
+  // GET /api/doctor/:doctorId/next-available
+  // Public route — finds the earliest date with available slots/windows.
+  // Works for both STREAM and WAVE scheduling types (Day 13).
+  @Get(':doctorId/next-available')
+  findNextAvailable(@Param('doctorId') doctorId: string) {
+    return this.slotService.findNextAvailable(doctorId);
+  }
 }
