@@ -5,6 +5,7 @@ import {
   Patch,
   Body,
   Param,
+  Query,
   UseGuards,
 } from '@nestjs/common';
 import { AppointmentService } from './appointment.service';
@@ -43,5 +44,17 @@ export class AppointmentController {
     @Body() dto: RescheduleAppointmentDto,
   ) {
     return this.appointmentService.rescheduleAppointment(user, id, dto);
+  }
+
+  @Get('doctor/all')
+  @Roles(Role.DOCTOR)
+  getDoctorAppointments(@CurrentUser() user: User, @Query('date') date?: string) {
+    return this.appointmentService.getDoctorAppointments(user, date);
+  }
+
+  @Patch('doctor/:id/cancel')
+  @Roles(Role.DOCTOR)
+  cancelAppointmentByDoctor(@CurrentUser() user: User, @Param('id') id: string) {
+    return this.appointmentService.cancelAppointmentByDoctor(user, id);
   }
 }

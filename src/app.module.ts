@@ -5,12 +5,14 @@ import { AuthModule } from './auth/auth.module';
 import { DoctorModule } from './doctor/doctor.module';
 import { PatientModule } from './patient/patient.module';
 import { AppointmentModule } from './appointment/appointment.module';
+import { NotificationModule } from './notification/notification.module';
 import { User } from './auth/user.entity';
 import { DoctorProfile } from './doctor/doctor-profile.entity';
 import { PatientProfile } from './patient/patient-profile.entity';
 import { RecurringAvailability, CustomAvailability } from './doctor/availability.entity';
 import { Slot } from './doctor/slot.entity';
 import { Appointment } from './appointment/appointment.entity';
+import { Notification } from './notification/notification.entity';
 
 @Controller()
 class AppController {
@@ -29,25 +31,26 @@ class AppController {
         'GET /api/doctor/patients': 'List all patients [DOCTOR only]',
         'GET /api/doctor': 'Discover doctors [PUBLIC]',
         'GET /api/doctor/:id': 'Doctor profile by ID [PUBLIC]',
-        'POST /api/patient/profile': 'Create patient profile [PATIENT only]',
-        'GET /api/patient/profile': 'Get patient profile [PATIENT only]',
-        'GET   /api/doctor/dashboard': 'Doctor dashboard [DOCTOR only]',
-        'GET   /api/doctor/patients': 'List all patients [DOCTOR only]',
-        'GET   /api/doctor/appointments': 'Doctor appointments [DOCTOR only]',
-        'GET   /api/doctor': 'Discover doctors [PUBLIC]',
-        'GET   /api/doctor/:id': 'Doctor profile by ID [PUBLIC]',
-        'GET   /api/doctor/:doctorId/slots': 'Get slots for doctor [PUBLIC]',
+        'GET /api/doctor/:doctorId/slots?date=YYYY-MM-DD': 'Slots for doctor on date [PUBLIC]',
+        'GET /api/doctor/:doctorId/next-available': 'Next available slot/wave [PUBLIC] (Day 13)',
         'POST  /api/doctor/availability': 'Create recurring availability [DOCTOR only]',
         'GET   /api/doctor/availability': 'Get recurring availability [DOCTOR only]',
         'PATCH /api/doctor/availability/:id': 'Update recurring slot [DOCTOR only]',
         'DELETE /api/doctor/availability/:id': 'Delete recurring slot [DOCTOR only]',
         'POST  /api/doctor/availability/override': 'Create custom override [DOCTOR only]',
         'GET   /api/doctor/availability/date': 'Get availability by date [DOCTOR only]',
+        'GET   /api/doctor/appointments': 'Doctor view appointments [DOCTOR only]',
+        'PATCH /api/doctor/appointments/:id/cancel': 'Doctor cancel appointment [DOCTOR only]',
         'POST  /api/appointment': 'Book appointment [PATIENT only]',
         'GET   /api/appointment/my': 'My appointments [PATIENT only]',
         'PATCH /api/appointment/:id/cancel': 'Cancel appointment [PATIENT only]',
-        'POST  /api/patient/profile': 'Create patient profile [PATIENT only]',
-        'GET   /api/patient/profile': 'Get patient profile [PATIENT only]',
+        'PATCH /api/appointment/:id/reschedule': 'Reschedule appointment [PATIENT only]',
+        'GET   /notifications': 'Get notifications [PATIENT only]',
+        'GET   /notifications/unread-count': 'Unread count [PATIENT only]',
+        'PATCH /notifications/:id/read': 'Mark one as read [PATIENT only]',
+        'PATCH /notifications/read-all': 'Mark all as read [PATIENT only]',
+        'POST /api/patient/profile': 'Create patient profile [PATIENT only]',
+        'GET /api/patient/profile': 'Get patient profile [PATIENT only]',
         'PATCH /api/patient/profile': 'Update patient profile [PATIENT only]',
         'GET /api/patient/dashboard': 'Patient dashboard [PATIENT only]',
         'GET /api/patient/doctors': 'List available doctors [PATIENT only]',
@@ -59,16 +62,6 @@ class AppController {
 @Module({
   imports: [
     ConfigModule.forRoot({ isGlobal: true }),
-   TypeOrmModule.forRoot({
-  type: 'postgres',
-  url: process.env.DATABASE_URL,
-  ssl: {
-    rejectUnauthorized: false,
-  },
-  entities: [User, DoctorProfile, PatientProfile, RecurringAvailability, CustomAvailability],
-  synchronize: false,
-  migrations: ['dist/migrations/*.js'],
-}),
     TypeOrmModule.forRootAsync({
       useFactory: () => ({
         type: 'postgres',
@@ -81,6 +74,7 @@ class AppController {
           CustomAvailability,
           Slot,
           Appointment,
+          Notification,
         ],
         synchronize: false,
         ssl: { rejectUnauthorized: false },
@@ -90,6 +84,7 @@ class AppController {
     DoctorModule,
     PatientModule,
     AppointmentModule,
+    NotificationModule,
   ],
   controllers: [AppController],
 })

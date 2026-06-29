@@ -12,6 +12,8 @@ import { DoctorProfile, SchedulingType } from '../doctor/doctor-profile.entity';
 import { Slot, SlotStatus } from '../doctor/slot.entity';
 import { Appointment, AppointmentStatus } from './appointment.entity';
 import { BookAppointmentDto, RescheduleAppointmentDto } from './appointment.dto';
+import { NotificationService } from '../notification/notification.service';
+import { NotificationType } from '../notification/notification.entity';
 
 const RESCHEDULE_CUTOFF_MINUTES = 30;
 
@@ -31,6 +33,8 @@ export class AppointmentService {
     private readonly userRepo: Repository<User>,
 
     private readonly dataSource: DataSource,
+
+    private readonly notificationService: NotificationService,
   ) {}
 
   // ─── Helpers ───────────────────────────────────────────────────────────────
@@ -221,6 +225,14 @@ export class AppointmentService {
       return await manager.save(Appointment, appt);
     });
 
+    // ── Notification ───────────────────────────────────────────────────────
+    await this.notificationService.createNotification(
+      patient.id,
+      NotificationType.APPOINTMENT_BOOKED,
+      'Appointment Confirmed',
+      `Your appointment with Dr. ${doctor.fullName} on ${slot.date} at ${normalizedStart} has been confirmed.`,
+    );
+
     return {
       success: true,
       message: 'Appointment booked successfully',
@@ -294,6 +306,14 @@ export class AppointmentService {
       });
       return await manager.save(Appointment, appt);
     });
+
+    // ── Notification ───────────────────────────────────────────────────────
+    await this.notificationService.createNotification(
+      patient.id,
+      NotificationType.APPOINTMENT_BOOKED,
+      'Appointment Confirmed',
+      `Your appointment with Dr. ${doctor.fullName} on ${appointment.date} at ${this.normalizeTime(appointment.startTime)} has been confirmed. Your token number is ${appointment.tokenNumber}.`,
+    );
 
     return {
       success: true,
@@ -432,6 +452,14 @@ export class AppointmentService {
       return await manager.save(Appointment, appt);
     });
 
+    // ── Notification ───────────────────────────────────────────────────────
+    await this.notificationService.createNotification(
+      patient.id,
+      NotificationType.APPOINTMENT_RESCHEDULED,
+      'Appointment Rescheduled',
+      `Your appointment with Dr. ${doctor.fullName} has been rescheduled to ${newSlot.date} at ${normalizedNewStart}.`,
+    );
+
     return {
       success: true,
       message: 'Appointment rescheduled successfully',
@@ -532,6 +560,14 @@ export class AppointmentService {
       return await manager.save(Appointment, appt);
     });
 
+    // ── Notification ───────────────────────────────────────────────────────
+    await this.notificationService.createNotification(
+      patient.id,
+      NotificationType.APPOINTMENT_RESCHEDULED,
+      'Appointment Rescheduled',
+      `Your appointment with Dr. ${doctor.fullName} has been rescheduled to ${newAppointment.date} at ${this.normalizeTime(newAppointment.startTime)}. Your new token number is ${newAppointment.tokenNumber}.`,
+    );
+
     return {
       success: true,
       message: `Appointment rescheduled successfully. Your new token number is ${newAppointment.tokenNumber}`,
@@ -628,6 +664,8 @@ export class AppointmentService {
     // Rule 1: cutoff
     this.enforceCutoffRule(appointment);
 
+    const doctor = await this.doctorProfileRepo.findOne({ where: { id: appointment.doctorId } });
+
     await this.dataSource.transaction(async (manager) => {
       await manager.update(Appointment, { id: appointmentId }, { status: AppointmentStatus.CANCELLED });
       const slot = await manager.findOne(Slot, { where: { id: appointment.slotId } });
@@ -641,6 +679,14 @@ export class AppointmentService {
       }
     });
 
+    // ── Notification ───────────────────────────────────────────────────────
+    await this.notificationService.createNotification(
+      patient.id,
+      NotificationType.APPOINTMENT_CANCELLED,
+      'Appointment Cancelled',
+      `Your appointment with Dr. ${doctor?.fullName ?? 'your doctor'} on ${appointment.date} at ${this.normalizeTime(appointment.startTime)} has been cancelled.`,
+    );
+
     return {
       success: true,
       message: 'Appointment cancelled successfully',
@@ -650,14 +696,26 @@ export class AppointmentService {
 
   // ─── Doctor: View Appointments ────────────────────────────────────────────
 
-  async getDoctorAppointments(doctor: User): Promise<object> {
+  async getDoctorAppointments(doctor: User, date?: string): Promise<object> {
     const profile = await this.doctorProfileRepo.findOne({ where: { userId: doctor.id } });
     if (!profile) {
       throw new NotFoundException('Doctor profile not found. Please complete onboarding first.');
     }
 
+    const where: any = {
+      doctorId: profile.id,
+      status: AppointmentStatus.BOOKED,
+    };
+
+    if (date) {
+      if (!/^\d{4}-\d{2}-\d{2}$/.test(date)) {
+        throw new BadRequestException('Invalid date format. Use YYYY-MM-DD');
+      }
+      where.date = date;
+    }
+
     const appointments = await this.appointmentRepo.find({
-      where: { doctorId: profile.id },
+      where,
       order: { date: 'ASC', startTime: 'ASC' },
     });
 
@@ -688,6 +746,65 @@ export class AppointmentService {
           createdAt: appt.createdAt,
         };
       }),
+    };
+  }
+
+  // ─── Doctor: Cancel Appointment ───────────────────────────────────────────
+
+  async cancelAppointmentByDoctor(doctor: User, appointmentId: string): Promise<object> {
+    const profile = await this.doctorProfileRepo.findOne({ where: { userId: doctor.id } });
+    if (!profile) {
+      throw new NotFoundException('Doctor profile not found. Please complete onboarding first.');
+    }
+
+    const appointment = await this.appointmentRepo.findOne({ where: { id: appointmentId } });
+
+    if (!appointment) {
+      throw new NotFoundException(`Appointment with ID ${appointmentId} not found`);
+    }
+    if (appointment.doctorId !== profile.id) {
+      throw new ForbiddenException(`You are not authorized to cancel this appointment`);
+    }
+    if (appointment.status === AppointmentStatus.CANCELLED) {
+      throw new ConflictException(`Appointment is already cancelled`);
+    }
+    if (appointment.status === AppointmentStatus.RESCHEDULED) {
+      throw new BadRequestException(`This appointment has been rescheduled. Cancel the new appointment instead`);
+    }
+
+    const [year, month, day] = appointment.date.split('-').map(Number);
+    const appointmentDate = new Date(year, month - 1, day);
+    const today = new Date();
+    today.setHours(0, 0, 0, 0);
+    if (appointmentDate < today) {
+      throw new BadRequestException(`Cannot cancel a past appointment`);
+    }
+
+    await this.dataSource.transaction(async (manager) => {
+      await manager.update(Appointment, { id: appointmentId }, { status: AppointmentStatus.CANCELLED });
+      const slot = await manager.findOne(Slot, { where: { id: appointment.slotId } });
+      if (slot) {
+        if (appointment.tokenNumber !== null) {
+          const newBookedCount = Math.max(0, slot.bookedCount - 1);
+          await manager.update(Slot, { id: slot.id }, { bookedCount: newBookedCount, status: SlotStatus.AVAILABLE });
+        } else {
+          await manager.update(Slot, { id: slot.id }, { status: SlotStatus.AVAILABLE });
+        }
+      }
+    });
+
+    // ── Notification ───────────────────────────────────────────────────────
+    await this.notificationService.createNotification(
+      appointment.patientId,
+      NotificationType.APPOINTMENT_CANCELLED,
+      'Appointment Cancelled by Doctor',
+      `Your appointment with Dr. ${profile.fullName} on ${appointment.date} at ${this.normalizeTime(appointment.startTime)} has been cancelled by the doctor.`,
+    );
+
+    return {
+      success: true,
+      message: 'Appointment cancelled successfully',
+      data: { id: appointmentId, status: AppointmentStatus.CANCELLED },
     };
   }
 }
