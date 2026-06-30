@@ -5,6 +5,7 @@ import { Appointment } from './appointment.entity';
 import { AppointmentService } from './appointment.service';
 import { AppointmentController } from './appointment.controller';
 import { DoctorProfile } from '../doctor/doctor-profile.entity';
+import { NotificationModule } from '../notification/notification.module';
 import { Slot } from '../doctor/slot.entity';
 import { User } from '../auth/user.entity';
 
