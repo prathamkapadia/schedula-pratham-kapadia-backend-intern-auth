@@ -6,6 +6,7 @@ import { DoctorModule } from './doctor/doctor.module';
 import { PatientModule } from './patient/patient.module';
 import { AppointmentModule } from './appointment/appointment.module';
 import { NotificationModule } from './notification/notification.module';
+import { ReminderModule } from './reminder/reminder.module';
 import { User } from './auth/user.entity';
 import { DoctorProfile } from './doctor/doctor-profile.entity';
 import { PatientProfile } from './patient/patient-profile.entity';
@@ -25,14 +26,14 @@ class AppController {
         'POST /api/auth/login': 'Login => get JWT token',
         'GET  /api/auth/me': 'Current user [any role]',
         'POST /api/doctor/profile': 'Create doctor profile [DOCTOR only]',
-        'GET /api/doctor/profile': 'Get doctor profile [DOCTOR only]',
+        'GET  /api/doctor/profile': 'Get doctor profile [DOCTOR only]',
         'PATCH /api/doctor/profile': 'Update doctor profile [DOCTOR only]',
-        'GET /api/doctor/dashboard': 'Doctor dashboard [DOCTOR only]',
-        'GET /api/doctor/patients': 'List all patients [DOCTOR only]',
-        'GET /api/doctor': 'Discover doctors [PUBLIC]',
-        'GET /api/doctor/:id': 'Doctor profile by ID [PUBLIC]',
-        'GET /api/doctor/:doctorId/slots?date=YYYY-MM-DD': 'Slots for doctor on date [PUBLIC]',
-        'GET /api/doctor/:doctorId/next-available': 'Next available slot/wave [PUBLIC] (Day 13)',
+        'GET  /api/doctor/dashboard': 'Doctor dashboard [DOCTOR only]',
+        'GET  /api/doctor/patients': 'List all patients [DOCTOR only]',
+        'GET  /api/doctor': 'Discover doctors [PUBLIC]',
+        'GET  /api/doctor/:id': 'Doctor profile by ID [PUBLIC]',
+        'GET  /api/doctor/:doctorId/slots?date=YYYY-MM-DD': 'Slots for doctor [PUBLIC]',
+        'GET  /api/doctor/:doctorId/next-available': 'Next available slot [PUBLIC]',
         'POST  /api/doctor/availability': 'Create recurring availability [DOCTOR only]',
         'GET   /api/doctor/availability': 'Get recurring availability [DOCTOR only]',
         'PATCH /api/doctor/availability/:id': 'Update recurring slot [DOCTOR only]',
@@ -50,10 +51,10 @@ class AppController {
         'PATCH /notifications/:id/read': 'Mark one as read [PATIENT only]',
         'PATCH /notifications/read-all': 'Mark all as read [PATIENT only]',
         'POST /api/patient/profile': 'Create patient profile [PATIENT only]',
-        'GET /api/patient/profile': 'Get patient profile [PATIENT only]',
+        'GET  /api/patient/profile': 'Get patient profile [PATIENT only]',
         'PATCH /api/patient/profile': 'Update patient profile [PATIENT only]',
-        'GET /api/patient/dashboard': 'Patient dashboard [PATIENT only]',
-        'GET /api/patient/doctors': 'List available doctors [PATIENT only]',
+        'GET  /api/patient/dashboard': 'Patient dashboard [PATIENT only]',
+        'GET  /api/patient/doctors': 'List available doctors [PATIENT only]',
       },
     };
   }
@@ -85,6 +86,7 @@ class AppController {
     PatientModule,
     AppointmentModule,
     NotificationModule,
+    ReminderModule,
   ],
   controllers: [AppController],
 })

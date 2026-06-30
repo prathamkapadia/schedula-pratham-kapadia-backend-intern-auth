@@ -226,7 +226,7 @@ export class AppointmentService {
     });
 
     // ── Notification ───────────────────────────────────────────────────────
-    await this.notificationService.createNotification(
+    await this.notificationService.create(
       patient.id,
       NotificationType.APPOINTMENT_BOOKED,
       'Appointment Confirmed',
@@ -308,7 +308,7 @@ export class AppointmentService {
     });
 
     // ── Notification ───────────────────────────────────────────────────────
-    await this.notificationService.createNotification(
+    await this.notificationService.create(
       patient.id,
       NotificationType.APPOINTMENT_BOOKED,
       'Appointment Confirmed',
@@ -453,7 +453,7 @@ export class AppointmentService {
     });
 
     // ── Notification ───────────────────────────────────────────────────────
-    await this.notificationService.createNotification(
+    await this.notificationService.create(
       patient.id,
       NotificationType.APPOINTMENT_RESCHEDULED,
       'Appointment Rescheduled',
@@ -526,7 +526,7 @@ export class AppointmentService {
       }
 
       // Free old wave seat
-      const oldSlot = await manager.findOne(Slot, { where: { id: oldAppointment.slotId } });
+      const oldSlot = await manager.findOne(Slot, { where: { id: oldAppointment.slotId! } });
       if (oldSlot) {
         const newOldCount = Math.max(0, oldSlot.bookedCount - 1);
         await manager.update(Slot, { id: oldSlot.id }, { bookedCount: newOldCount, status: SlotStatus.AVAILABLE });
@@ -561,7 +561,7 @@ export class AppointmentService {
     });
 
     // ── Notification ───────────────────────────────────────────────────────
-    await this.notificationService.createNotification(
+    await this.notificationService.create(
       patient.id,
       NotificationType.APPOINTMENT_RESCHEDULED,
       'Appointment Rescheduled',
@@ -668,7 +668,7 @@ export class AppointmentService {
 
     await this.dataSource.transaction(async (manager) => {
       await manager.update(Appointment, { id: appointmentId }, { status: AppointmentStatus.CANCELLED });
-      const slot = await manager.findOne(Slot, { where: { id: appointment.slotId } });
+      const slot = await manager.findOne(Slot, { where: { id: appointment.slotId! } });
       if (slot) {
         if (appointment.tokenNumber !== null) {
           const newBookedCount = Math.max(0, slot.bookedCount - 1);
@@ -680,7 +680,7 @@ export class AppointmentService {
     });
 
     // ── Notification ───────────────────────────────────────────────────────
-    await this.notificationService.createNotification(
+    await this.notificationService.create(
       patient.id,
       NotificationType.APPOINTMENT_CANCELLED,
       'Appointment Cancelled',
@@ -782,7 +782,7 @@ export class AppointmentService {
 
     await this.dataSource.transaction(async (manager) => {
       await manager.update(Appointment, { id: appointmentId }, { status: AppointmentStatus.CANCELLED });
-      const slot = await manager.findOne(Slot, { where: { id: appointment.slotId } });
+      const slot = await manager.findOne(Slot, { where: { id: appointment.slotId! } });
       if (slot) {
         if (appointment.tokenNumber !== null) {
           const newBookedCount = Math.max(0, slot.bookedCount - 1);
@@ -794,7 +794,7 @@ export class AppointmentService {
     });
 
     // ── Notification ───────────────────────────────────────────────────────
-    await this.notificationService.createNotification(
+    await this.notificationService.create(
       appointment.patientId,
       NotificationType.APPOINTMENT_CANCELLED,
       'Appointment Cancelled by Doctor',
