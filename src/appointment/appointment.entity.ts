@@ -36,12 +36,12 @@ export class Appointment {
   @Column({ name: 'doctor_id' })
   doctorId: string;
 
-  @ManyToOne(() => Slot, { onDelete: 'CASCADE' })
+  @ManyToOne(() => Slot, { onDelete: 'SET NULL', nullable: true })
   @JoinColumn({ name: 'slot_id' })
-  slot: Slot;
+  slot: Slot | null;
 
-  @Column({ name: 'slot_id' })
-  slotId: string;
+  @Column({ name: 'slot_id', nullable: true })
+  slotId: string | null;
 
   @Column({ type: 'date' })
   date: string;
@@ -59,13 +59,19 @@ export class Appointment {
   })
   status: AppointmentStatus;
 
-  @Column({ type: 'int', name: 'token_number', nullable: true })
+  // Day 16: tracks whether a reminder notification has already been sent
+  // Prevents duplicate reminders even if the cron job runs multiple times
+  @Column({ name: 'reminder_sent', type: 'boolean', default: false })
+  reminderSent: boolean;
+
+  // Day 13: rescheduling fields
+  @Column({ name: 'token_number', type: 'int', nullable: true, default: null })
   tokenNumber: number | null;
 
-  @Column({ type: 'uuid', name: 'rescheduled_from_id', nullable: true })
+  @Column({ name: 'rescheduled_from_id', type: 'uuid', nullable: true, default: null })
   rescheduledFromId: string | null;
 
-  @Column({ name: 'rescheduled_at', type: 'timestamp', nullable: true })
+  @Column({ name: 'rescheduled_at', type: 'timestamp', nullable: true, default: null })
   rescheduledAt: Date | null;
 
   @CreateDateColumn({ name: 'created_at' })
