@@ -46,6 +46,11 @@ export class AppointmentService {
     return parts[0] * 60 + parts[1];
   }
 
+  // Day 18 — Booking Window (Iteration 1): bookings (and reschedules, which
+  // reuse this same helper) are only allowed for TODAY's date. Past dates
+  // are rejected as before, and any future date — including tomorrow — is
+  // now also rejected. This intentionally narrows the previous "any future
+  // date allowed" behavior down to "only today allowed."
   private validateBookingTime(
     date: string,
     startTime: string,
@@ -54,23 +59,44 @@ export class AppointmentService {
       throw new BadRequestException(`Invalid date format: ${date}. Use YYYY-MM-DD`);
     }
     const [year, month, day] = date.split('-').map(Number);
-    const appointmentDate = new Date(year, month - 1, day);
-    const today = new Date();
-    today.setHours(0, 0, 0, 0);
-    if (appointmentDate < today) {
+    const requestedDate = new Date(year, month - 1, day);
+
+    if (
+      Number.isNaN(requestedDate.getTime()) ||
+      requestedDate.getFullYear() !== year ||
+      requestedDate.getMonth() !== month - 1 ||
+      requestedDate.getDate() !== day
+    ) {
+      throw new BadRequestException(`Invalid date: ${date} does not exist on the calendar`);
+    }
+
+    const now = new Date();
+    const today = new Date(now.getFullYear(), now.getMonth(), now.getDate());
+
+    if (requestedDate < today) {
       throw new BadRequestException(`Cannot book appointment for past date: ${date}`);
     }
-    const now = new Date();
-    const isToday =
-      now.getFullYear() === year && now.getMonth() + 1 === month && now.getDate() === day;
-    if (isToday) {
-      const slotStartMinutes = this.toMinutes(startTime);
-      const currentMinutes = now.getHours() * 60 + now.getMinutes();
-      if (slotStartMinutes <= currentMinutes) {
-        throw new BadRequestException(`Cannot book a past time slot. Please choose a future slot`);
-      }
+    if (requestedDate > today) {
+      throw new BadRequestException(
+        `Bookings are currently only allowed for today's date (${this.formatDate(today)}). Future date booking is not supported in this iteration.`,
+      );
     }
+
+    // requestedDate === today — also block past time-of-day slots
+    const slotStartMinutes = this.toMinutes(startTime);
+    const currentMinutes = now.getHours() * 60 + now.getMinutes();
+    if (slotStartMinutes <= currentMinutes) {
+      throw new BadRequestException(`Cannot book a past time slot. Please choose a future slot`);
+    }
+
     return { year, month, day };
+  }
+
+  private formatDate(d: Date): string {
+    const y = d.getFullYear();
+    const m = String(d.getMonth() + 1).padStart(2, '0');
+    const day = String(d.getDate()).padStart(2, '0');
+    return `${y}-${m}-${day}`;
   }
 
   // Rule 1: 30-minute cutoff
@@ -340,6 +366,7 @@ export class AppointmentService {
 
     const normalizedNewStart = this.normalizeTime(dto.newStartTime);
     const normalizedNewEnd = this.normalizeTime(dto.newEndTime);
+    // Day 18: this now also enforces today-only for the new date/time
     this.validateBookingTime(dto.newDate, normalizedNewStart);
 
     // Prevent rescheduling to same slot
