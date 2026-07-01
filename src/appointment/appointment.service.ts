@@ -35,6 +35,10 @@ export class AppointmentService {
 
   // ─── Helpers ───────────────────────────────────────────────────────────────
 
+  private readonly DAY_NAMES = [
+    'Sunday', 'Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday',
+  ];
+
   private normalizeTime(time: string): string {
     if (!time) return time;
     const parts = time.split(':');
@@ -46,6 +50,22 @@ export class AppointmentService {
     return parts[0] * 60 + parts[1];
   }
 
+  private minutesToTimeStr(totalMinutes: number): string {
+    const clamped = ((totalMinutes % 1440) + 1440) % 1440;
+    const h = Math.floor(clamped / 60);
+    const m = clamped % 60;
+    return `${String(h).padStart(2, '0')}:${String(m).padStart(2, '0')}`;
+  }
+
+  private formatDate(d: Date): string {
+    const y = d.getFullYear();
+    const m = String(d.getMonth() + 1).padStart(2, '0');
+    const day = String(d.getDate()).padStart(2, '0');
+    return `${y}-${m}-${day}`;
+  }
+
+  // ─── Day 18: Date Validation ───────────────────────────────────────────────
+
   private validateBookingTime(
     date: string,
     startTime: string,
@@ -54,26 +74,178 @@ export class AppointmentService {
       throw new BadRequestException(`Invalid date format: ${date}. Use YYYY-MM-DD`);
     }
     const [year, month, day] = date.split('-').map(Number);
-    const appointmentDate = new Date(year, month - 1, day);
-    const today = new Date();
-    today.setHours(0, 0, 0, 0);
-    if (appointmentDate < today) {
+    const requestedDate = new Date(year, month - 1, day);
+
+    if (
+      Number.isNaN(requestedDate.getTime()) ||
+      requestedDate.getFullYear() !== year ||
+      requestedDate.getMonth() !== month - 1 ||
+      requestedDate.getDate() !== day
+    ) {
+      throw new BadRequestException(`Invalid date: ${date} does not exist on the calendar`);
+    }
+
+    const now = new Date();
+    const today = new Date(now.getFullYear(), now.getMonth(), now.getDate());
+
+    if (requestedDate < today) {
       throw new BadRequestException(`Cannot book appointment for past date: ${date}`);
     }
-    const now = new Date();
-    const isToday =
-      now.getFullYear() === year && now.getMonth() + 1 === month && now.getDate() === day;
-    if (isToday) {
-      const slotStartMinutes = this.toMinutes(startTime);
-      const currentMinutes = now.getHours() * 60 + now.getMinutes();
-      if (slotStartMinutes <= currentMinutes) {
-        throw new BadRequestException(`Cannot book a past time slot. Please choose a future slot`);
-      }
+    if (requestedDate > today) {
+      throw new BadRequestException(
+        `Bookings are currently only allowed for today's date (${this.formatDate(today)}). Future date booking is not supported in this iteration.`,
+      );
     }
+
+    const slotStartMinutes = this.toMinutes(startTime);
+    const currentMinutes = now.getHours() * 60 + now.getMinutes();
+    if (slotStartMinutes <= currentMinutes) {
+      throw new BadRequestException(`Cannot book a past time slot. Please choose a future slot`);
+    }
+
     return { year, month, day };
   }
 
-  // Rule 1: 30-minute cutoff
+  // ─── Day 19: Booking Window Validation ────────────────────────────────────
+
+  // Booking Opens  : 2 hours BEFORE consultation start time
+  // Booking Closes : 1 hour  BEFORE consultation end time
+  private validateBookingWindow(doctor: DoctorProfile, now: Date = new Date()): void {
+    const { bookingOpensAt, bookingClosesAt, isAvailableToday, todayName } =
+      this.computeBookingWindow(doctor, now);
+
+    if (!isAvailableToday) {
+      throw new BadRequestException(
+        `Dr. ${doctor.fullName} is not available today (${todayName}).`,
+      );
+    }
+
+    const currentMinutes = now.getHours() * 60 + now.getMinutes();
+
+    if (currentMinutes < bookingOpensAt) {
+      throw new BadRequestException(
+        `Booking window has not opened yet. Bookings for Dr. ${doctor.fullName} open at ${this.minutesToTimeStr(bookingOpensAt)}.`,
+      );
+    }
+    if (currentMinutes > bookingClosesAt) {
+      throw new BadRequestException(
+        `Booking window has closed. Bookings for Dr. ${doctor.fullName} closed at ${this.minutesToTimeStr(bookingClosesAt)}.`,
+      );
+    }
+  }
+
+  // Shared computation used by both validation and the public info endpoint
+  computeBookingWindow(
+    doctor: DoctorProfile,
+    now: Date = new Date(),
+  ): {
+    isAvailableToday: boolean;
+    todayName: string;
+    consultationStart: string | null;
+    consultationEnd: string | null;
+    bookingOpensAt: number;
+    bookingClosesAt: number;
+    bookingOpensAtStr: string | null;
+    bookingClosesAtStr: string | null;
+    isWindowOpen: boolean;
+  } {
+    const todayName = this.DAY_NAMES[now.getDay()];
+    const todayAvailability = (doctor.availability || []).find(
+      (a) => a.day?.toLowerCase() === todayName.toLowerCase(),
+    );
+
+    if (!todayAvailability) {
+      return {
+        isAvailableToday: false,
+        todayName,
+        consultationStart: null,
+        consultationEnd: null,
+        bookingOpensAt: -1,
+        bookingClosesAt: -1,
+        bookingOpensAtStr: null,
+        bookingClosesAtStr: null,
+        isWindowOpen: false,
+      };
+    }
+
+    const consultStartMinutes = this.toMinutes(this.normalizeTime(todayAvailability.from));
+    const consultEndMinutes = this.toMinutes(this.normalizeTime(todayAvailability.to));
+
+    if (
+      Number.isNaN(consultStartMinutes) ||
+      Number.isNaN(consultEndMinutes) ||
+      consultEndMinutes <= consultStartMinutes
+    ) {
+      throw new BadRequestException(
+        `Invalid consultation timings configured for Dr. ${doctor.fullName}.`,
+      );
+    }
+
+    const bookingOpensAt = consultStartMinutes - 120;
+    const bookingClosesAt = consultEndMinutes - 60;
+    const currentMinutes = now.getHours() * 60 + now.getMinutes();
+
+    return {
+      isAvailableToday: true,
+      todayName,
+      consultationStart: this.minutesToTimeStr(consultStartMinutes),
+      consultationEnd: this.minutesToTimeStr(consultEndMinutes),
+      bookingOpensAt,
+      bookingClosesAt,
+      bookingOpensAtStr: this.minutesToTimeStr(bookingOpensAt),
+      bookingClosesAtStr: this.minutesToTimeStr(bookingClosesAt),
+      isWindowOpen: currentMinutes >= bookingOpensAt && currentMinutes <= bookingClosesAt,
+    };
+  }
+
+  // ─── Public: Get Booking Window Info ──────────────────────────────────────
+
+  async getBookingWindow(doctorId: string): Promise<object> {
+    const doctor = await this.doctorProfileRepo.findOne({ where: { id: doctorId } });
+    if (!doctor) {
+      throw new NotFoundException(`Doctor with ID ${doctorId} not found`);
+    }
+
+    const now = new Date();
+    const window = this.computeBookingWindow(doctor, now);
+
+    if (!window.isAvailableToday) {
+      return {
+        success: true,
+        doctorId: doctor.id,
+        doctorName: doctor.fullName,
+        today: window.todayName,
+        isAvailableToday: false,
+        message: `Dr. ${doctor.fullName} is not available today (${window.todayName}).`,
+      };
+    }
+
+    return {
+      success: true,
+      doctorId: doctor.id,
+      doctorName: doctor.fullName,
+      today: window.todayName,
+      isAvailableToday: true,
+      consultationHours: {
+        start: window.consultationStart,
+        end: window.consultationEnd,
+      },
+      bookingWindow: {
+        opensAt: window.bookingOpensAtStr,
+        closesAt: window.bookingClosesAtStr,
+        isCurrentlyOpen: window.isWindowOpen,
+      },
+      currentTime: `${String(now.getHours()).padStart(2, '0')}:${String(now.getMinutes()).padStart(2, '0')}`,
+      message: window.isWindowOpen
+        ? `Booking is currently open. Window closes at ${window.bookingClosesAtStr}.`
+        : now.getHours() * 60 + now.getMinutes() < window.bookingOpensAt
+        ? `Booking window opens at ${window.bookingOpensAtStr}.`
+        : `Booking window has closed for today. It closed at ${window.bookingClosesAtStr}.`,
+    };
+  }
+
+  // ─── Cutoff Rule ──────────────────────────────────────────────────────────
+
   private enforceCutoffRule(appointment: Appointment): void {
     const now = new Date();
     const [year, month, day] = appointment.date.split('-').map(Number);
@@ -91,7 +263,8 @@ export class AppointmentService {
     }
   }
 
-  // Rule 2: Find next available STREAM slot
+  // ─── Next Available Slot Helpers ──────────────────────────────────────────
+
   private async findNextAvailableStreamSlot(
     doctorId: string,
     afterDate: string,
@@ -114,7 +287,6 @@ export class AppointmentService {
     return null;
   }
 
-  // Rule 2: Find next available WAVE window
   private async findNextAvailableWaveSlot(
     doctorId: string,
     afterDate: string,
@@ -144,12 +316,16 @@ export class AppointmentService {
   // ─── Book Appointment ──────────────────────────────────────────────────────
 
   async bookAppointment(patient: User, dto: BookAppointmentDto): Promise<object> {
+    // Day 18: today-only date validation
     this.validateBookingTime(dto.date, dto.startTime);
 
     const doctor = await this.doctorProfileRepo.findOne({ where: { id: dto.doctorId } });
     if (!doctor) {
       throw new NotFoundException(`Doctor with ID ${dto.doctorId} not found`);
     }
+
+    // Day 19: time-based booking window validation
+    this.validateBookingWindow(doctor);
 
     const normalizedStart = this.normalizeTime(dto.startTime);
     const normalizedEnd = this.normalizeTime(dto.endTime);
@@ -176,7 +352,7 @@ export class AppointmentService {
     return this.bookStreamAppointment(patient, doctor, slot, normalizedStart, normalizedEnd);
   }
 
-  // ─── STREAM booking ────────────────────────────────────────────────────────
+  // ─── STREAM Booking ────────────────────────────────────────────────────────
 
   private async bookStreamAppointment(
     patient: User,
@@ -236,7 +412,7 @@ export class AppointmentService {
     };
   }
 
-  // ─── WAVE booking ──────────────────────────────────────────────────────────
+  // ─── WAVE Booking ──────────────────────────────────────────────────────────
 
   private async bookWaveAppointment(
     patient: User,
@@ -322,27 +498,22 @@ export class AppointmentService {
     if (!appointment) {
       throw new NotFoundException(`Appointment with ID ${appointmentId} not found`);
     }
-
     if (appointment.patientId !== patient.id) {
       throw new ForbiddenException(`You are not authorized to reschedule this appointment`);
     }
-
     if (appointment.status === AppointmentStatus.CANCELLED) {
       throw new BadRequestException(`Cannot reschedule a cancelled appointment`);
     }
-
     if (appointment.status === AppointmentStatus.RESCHEDULED) {
       throw new BadRequestException(`This appointment has already been rescheduled. Please check your active appointments`);
     }
 
-    // Rule 1: cutoff on old appointment
     this.enforceCutoffRule(appointment);
 
     const normalizedNewStart = this.normalizeTime(dto.newStartTime);
     const normalizedNewEnd = this.normalizeTime(dto.newEndTime);
     this.validateBookingTime(dto.newDate, normalizedNewStart);
 
-    // Prevent rescheduling to same slot
     if (
       appointment.date === dto.newDate &&
       this.normalizeTime(appointment.startTime) === normalizedNewStart &&
@@ -353,6 +524,9 @@ export class AppointmentService {
 
     const doctor = await this.doctorProfileRepo.findOne({ where: { id: appointment.doctorId } });
     if (!doctor) throw new NotFoundException(`Doctor not found`);
+
+    // Day 19: time-based booking window validation
+    this.validateBookingWindow(doctor);
 
     const newSlot = await this.slotRepo.findOne({
       where: {
@@ -381,7 +555,7 @@ export class AppointmentService {
     return this.rescheduleStreamAppointment(patient, doctor, appointment, newSlot, normalizedNewStart, normalizedNewEnd);
   }
 
-  // ─── STREAM reschedule ─────────────────────────────────────────────────────
+  // ─── STREAM Reschedule ─────────────────────────────────────────────────────
 
   private async rescheduleStreamAppointment(
     patient: User,
@@ -406,17 +580,12 @@ export class AppointmentService {
       if (!freshNewSlot || freshNewSlot.status === SlotStatus.BOOKED) {
         throw new ConflictException(`This slot was just booked by someone else. Please choose another slot`);
       }
-
-      // Release old slot
       await manager.update(Slot, { id: oldAppointment.slotId }, { status: SlotStatus.AVAILABLE });
-      // Reserve new slot
       await manager.update(Slot, { id: newSlot.id }, { status: SlotStatus.BOOKED });
-      // Mark old appointment as RESCHEDULED
       await manager.update(Appointment, { id: oldAppointment.id }, {
         status: AppointmentStatus.RESCHEDULED,
         rescheduledAt: new Date(),
       });
-      // Create new appointment
       const appt = manager.create(Appointment, {
         patientId: patient.id,
         doctorId: doctor.id,
@@ -457,7 +626,7 @@ export class AppointmentService {
     };
   }
 
-  // ─── WAVE reschedule ───────────────────────────────────────────────────────
+  // ─── WAVE Reschedule ───────────────────────────────────────────────────────
 
   private async rescheduleWaveAppointment(
     patient: User,
@@ -497,26 +666,22 @@ export class AppointmentService {
         });
       }
 
-      // Free old wave seat
       const oldSlot = await manager.findOne(Slot, { where: { id: oldAppointment.slotId } });
       if (oldSlot) {
         const newOldCount = Math.max(0, oldSlot.bookedCount - 1);
         await manager.update(Slot, { id: oldSlot.id }, { bookedCount: newOldCount, status: SlotStatus.AVAILABLE });
       }
 
-      // Reserve new wave seat
       const newTokenNumber = freshNewSlot.bookedCount + 1;
       const newBookedCount = freshNewSlot.bookedCount + 1;
       const newStatus = newBookedCount >= maxPatients ? SlotStatus.BOOKED : SlotStatus.AVAILABLE;
       await manager.update(Slot, { id: freshNewSlot.id }, { bookedCount: newBookedCount, status: newStatus });
 
-      // Mark old as RESCHEDULED
       await manager.update(Appointment, { id: oldAppointment.id }, {
         status: AppointmentStatus.RESCHEDULED,
         rescheduledAt: new Date(),
       });
 
-      // Create new appointment
       const appt = manager.create(Appointment, {
         patientId: patient.id,
         doctorId: doctor.id,
@@ -625,7 +790,6 @@ export class AppointmentService {
       throw new BadRequestException(`Cannot cancel a past appointment`);
     }
 
-    // Rule 1: cutoff
     this.enforceCutoffRule(appointment);
 
     await this.dataSource.transaction(async (manager) => {
