@@ -82,7 +82,7 @@ export class DoctorProfile {
 
   // Day 20: Future booking configuration
   // false = today only (default), true = allow future bookings
-  @Column({ name: 'allow_future_booking', default: false })
+  @Column({ type: 'boolean',name: 'allow_future_booking', default: false })
   allowFutureBooking: boolean;
 
   // Day 20: Max days ahead a patient can book — null means default 7 days
