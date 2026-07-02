@@ -64,18 +64,22 @@ export class AppointmentService {
     return `${y}-${m}-${day}`;
   }
 
-  // ─── Day 18: Date Validation ───────────────────────────────────────────────
+  // ─── Day 18 + Day 20: Date Validation ─────────────────────────────────────
 
   private validateBookingTime(
     date: string,
     startTime: string,
+    doctor?: DoctorProfile,
   ): { year: number; month: number; day: number } {
+    // 1. Format check
     if (!/^\d{4}-\d{2}-\d{2}$/.test(date)) {
       throw new BadRequestException(`Invalid date format: ${date}. Use YYYY-MM-DD`);
     }
+
     const [year, month, day] = date.split('-').map(Number);
     const requestedDate = new Date(year, month - 1, day);
 
+    // 2. Calendar validity
     if (
       Number.isNaN(requestedDate.getTime()) ||
       requestedDate.getFullYear() !== year ||
@@ -87,20 +91,48 @@ export class AppointmentService {
 
     const now = new Date();
     const today = new Date(now.getFullYear(), now.getMonth(), now.getDate());
+    const isToday = requestedDate.getTime() === today.getTime();
 
+    // 3. Past date check
     if (requestedDate < today) {
       throw new BadRequestException(`Cannot book appointment for past date: ${date}`);
     }
-    if (requestedDate > today) {
-      throw new BadRequestException(
-        `Bookings are currently only allowed for today's date (${this.formatDate(today)}). Future date booking is not supported in this iteration.`,
-      );
+
+    // 4. Future date check — Day 20 doctor config
+    if (!isToday) {
+      const allowFuture = doctor?.allowFutureBooking ?? false;
+
+      if (!allowFuture) {
+        throw new BadRequestException(
+          `This doctor only accepts same-day bookings. Bookings are only allowed for today's date (${this.formatDate(today)}).`,
+        );
+      }
+
+      const rawMax = doctor?.maxFutureBookingDays;
+      if (rawMax !== null && rawMax !== undefined && rawMax < 1) {
+        throw new BadRequestException(
+          `Invalid doctor configuration: maxFutureBookingDays must be at least 1.`,
+        );
+      }
+
+      const maxDays = (rawMax != null && rawMax > 0) ? rawMax : 7;
+      const maxDate = new Date(today);
+      maxDate.setDate(today.getDate() + maxDays);
+
+      if (requestedDate > maxDate) {
+        throw new BadRequestException(
+          `Booking too far in advance. This doctor accepts bookings up to ${maxDays} day(s) ahead. Latest allowed date: ${this.formatDate(maxDate)}.`,
+        );
+      }
     }
 
-    const slotStartMinutes = this.toMinutes(startTime);
-    const currentMinutes = now.getHours() * 60 + now.getMinutes();
-    if (slotStartMinutes <= currentMinutes) {
-      throw new BadRequestException(`Cannot book a past time slot. Please choose a future slot`);
+    // 5. Past time-of-day check — only for today
+    if (isToday) {
+      const slotStartMinutes = this.toMinutes(startTime);
+      const currentMinutes = now.getHours() * 60 + now.getMinutes();
+      if (slotStartMinutes <= currentMinutes) {
+        throw new BadRequestException(`Cannot book a past time slot. Please choose a future slot`);
+      }
     }
 
     return { year, month, day };
@@ -108,8 +140,6 @@ export class AppointmentService {
 
   // ─── Day 19: Booking Window Validation ────────────────────────────────────
 
-  // Booking Opens  : 2 hours BEFORE consultation start time
-  // Booking Closes : 1 hour  BEFORE consultation end time
   private validateBookingWindow(doctor: DoctorProfile, now: Date = new Date()): void {
     const { bookingOpensAt, bookingClosesAt, isAvailableToday, todayName } =
       this.computeBookingWindow(doctor, now);
@@ -134,7 +164,6 @@ export class AppointmentService {
     }
   }
 
-  // Shared computation used by both validation and the public info endpoint
   computeBookingWindow(
     doctor: DoctorProfile,
     now: Date = new Date(),
@@ -316,16 +345,23 @@ export class AppointmentService {
   // ─── Book Appointment ──────────────────────────────────────────────────────
 
   async bookAppointment(patient: User, dto: BookAppointmentDto): Promise<object> {
-    // Day 18: today-only date validation
-    this.validateBookingTime(dto.date, dto.startTime);
-
+    // Fetch doctor first — needed for Day 20 config
     const doctor = await this.doctorProfileRepo.findOne({ where: { id: dto.doctorId } });
     if (!doctor) {
       throw new NotFoundException(`Doctor with ID ${dto.doctorId} not found`);
     }
 
-    // Day 19: time-based booking window validation
-    this.validateBookingWindow(doctor);
+    // Day 18 + Day 20: date validation with doctor config
+    this.validateBookingTime(dto.date, dto.startTime, doctor);
+
+    // Day 19: time-window only applies for today
+    const [year, month, day] = dto.date.split('-').map(Number);
+    const requestedDate = new Date(year, month - 1, day);
+    const today = new Date();
+    today.setHours(0, 0, 0, 0);
+    if (requestedDate.getTime() === today.getTime()) {
+      this.validateBookingWindow(doctor);
+    }
 
     const normalizedStart = this.normalizeTime(dto.startTime);
     const normalizedEnd = this.normalizeTime(dto.endTime);
@@ -455,7 +491,6 @@ export class AppointmentService {
       const newTokenNumber = freshSlot.bookedCount + 1;
       const newBookedCount = freshSlot.bookedCount + 1;
       const newStatus = newBookedCount >= maxPatients ? SlotStatus.BOOKED : SlotStatus.AVAILABLE;
-
       await manager.update(Slot, { id: freshSlot.id }, { bookedCount: newBookedCount, status: newStatus });
 
       const appt = manager.create(Appointment, {
@@ -512,7 +547,13 @@ export class AppointmentService {
 
     const normalizedNewStart = this.normalizeTime(dto.newStartTime);
     const normalizedNewEnd = this.normalizeTime(dto.newEndTime);
-    this.validateBookingTime(dto.newDate, normalizedNewStart);
+
+    // Fetch doctor before validateBookingTime — needed for Day 20 config
+    const doctor = await this.doctorProfileRepo.findOne({ where: { id: appointment.doctorId } });
+    if (!doctor) throw new NotFoundException(`Doctor not found`);
+
+    // Day 18 + Day 20: date validation with doctor config
+    this.validateBookingTime(dto.newDate, normalizedNewStart, doctor);
 
     if (
       appointment.date === dto.newDate &&
@@ -522,11 +563,14 @@ export class AppointmentService {
       throw new BadRequestException(`New appointment time is the same as current. Please choose a different time`);
     }
 
-    const doctor = await this.doctorProfileRepo.findOne({ where: { id: appointment.doctorId } });
-    if (!doctor) throw new NotFoundException(`Doctor not found`);
-
-    // Day 19: time-based booking window validation
-    this.validateBookingWindow(doctor);
+    // Day 19: time-window only applies for today
+    const [year, month, day] = dto.newDate.split('-').map(Number);
+    const requestedDate = new Date(year, month - 1, day);
+    const today = new Date();
+    today.setHours(0, 0, 0, 0);
+    if (requestedDate.getTime() === today.getTime()) {
+      this.validateBookingWindow(doctor);
+    }
 
     const newSlot = await this.slotRepo.findOne({
       where: {

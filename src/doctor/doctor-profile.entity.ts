@@ -80,6 +80,15 @@ export class DoctorProfile {
   @Column({ type: 'int', name: 'max_patients_per_wave', nullable: true })
   maxPatientsPerWave: number | null;
 
+  // Day 20: Future booking configuration
+  // false = today only (default), true = allow future bookings
+  @Column({ name: 'allow_future_booking', default: false })
+  allowFutureBooking: boolean;
+
+  // Day 20: Max days ahead a patient can book — null means default 7 days
+  @Column({ type: 'int', name: 'max_future_booking_days', nullable: true })
+  maxFutureBookingDays: number | null;
+
   @CreateDateColumn()
   createdAt: Date;
 

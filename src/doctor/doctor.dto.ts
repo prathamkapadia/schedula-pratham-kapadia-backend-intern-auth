@@ -65,34 +65,40 @@ export class CreateDoctorProfileDto {
   @IsString()
   profilePictureUrl?: string;
 
-  // Slot duration in minutes — min 10, max 120 — used only for STREAM
-  // Slot duration in minutes — min 10, max 120
   @IsOptional()
   @IsInt()
   @Min(10)
   @Max(120)
   slotDuration?: number;
 
-  // STREAM or WAVE — defaults to STREAM if not provided
   @IsOptional()
   @IsEnum(SchedulingType, {
     message: `schedulingType must be one of: ${Object.values(SchedulingType).join(', ')}`,
   })
   schedulingType?: SchedulingType;
 
-  // Buffer time in minutes between STREAM slots — only relevant for STREAM
   @IsOptional()
   @IsInt()
   @Min(0)
   @Max(60)
   bufferTime?: number;
 
-  // Required when schedulingType is WAVE — validated in service layer too
   @ValidateIf((o) => o.schedulingType === SchedulingType.WAVE)
   @IsInt()
   @Min(1)
   @Max(50)
   maxPatientsPerWave?: number;
+
+  // Day 20
+  @IsOptional()
+  @IsBoolean()
+  allowFutureBooking?: boolean;
+
+  @IsOptional()
+  @IsInt()
+  @Min(1, { message: 'maxFutureBookingDays must be at least 1' })
+  @Max(365)
+  maxFutureBookingDays?: number | null;
 }
 
 export class UpdateDoctorProfileDto {
@@ -136,7 +142,6 @@ export class UpdateDoctorProfileDto {
   @IsString()
   profilePictureUrl?: string;
 
-  // Slot duration in minutes — min 10, max 120
   @IsOptional()
   @IsInt()
   @Min(10)
@@ -160,6 +165,17 @@ export class UpdateDoctorProfileDto {
   @Min(1)
   @Max(50)
   maxPatientsPerWave?: number;
+
+  // Day 20
+  @IsOptional()
+  @IsBoolean()
+  allowFutureBooking?: boolean;
+
+  @IsOptional()
+  @IsInt()
+  @Min(1, { message: 'maxFutureBookingDays must be at least 1' })
+  @Max(365)
+  maxFutureBookingDays?: number | null;
 }
 
 export class DoctorQueryDto {
