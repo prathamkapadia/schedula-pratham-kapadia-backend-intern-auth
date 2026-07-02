@@ -62,6 +62,9 @@ export class Appointment {
   @Column({ type: 'int', name: 'token_number', nullable: true })
   tokenNumber: number | null;
 
+  @Column({ name: 'reminder_sent', type: 'boolean', default: false })
+reminderSent: boolean;
+
   @Column({ type: 'uuid', name: 'rescheduled_from_id', nullable: true })
   rescheduledFromId: string | null;
 
