@@ -10,6 +10,7 @@ import { Repository, DataSource } from 'typeorm';
 import { User } from '../auth/user.entity';
 import { DoctorProfile, SchedulingType } from '../doctor/doctor-profile.entity';
 import { Slot, SlotStatus } from '../doctor/slot.entity';
+import { DoctorLeave } from '../doctor/doctor-leave.entity';
 import { Appointment, AppointmentStatus } from './appointment.entity';
 import { BookAppointmentDto, RescheduleAppointmentDto } from './appointment.dto';
 
@@ -29,6 +30,9 @@ export class AppointmentService {
 
     @InjectRepository(User)
     private readonly userRepo: Repository<User>,
+
+    @InjectRepository(DoctorLeave)
+    private readonly leaveRepo: Repository<DoctorLeave>,
 
     private readonly dataSource: DataSource,
   ) {}
@@ -62,6 +66,17 @@ export class AppointmentService {
     const m = String(d.getMonth() + 1).padStart(2, '0');
     const day = String(d.getDate()).padStart(2, '0');
     return `${y}-${m}-${day}`;
+  }
+
+  // ─── Day 21: Leave Check ────────────────────────────────────────────────────
+
+  private async checkNotOnLeave(doctorId: string, date: string): Promise<void> {
+    const leave = await this.leaveRepo.findOne({ where: { doctorId, date } });
+    if (leave) {
+      throw new BadRequestException(
+        `Doctor is unavailable on this date. Please select another available date.`,
+      );
+    }
   }
 
   // ─── Day 18 + Day 20: Date Validation ─────────────────────────────────────
@@ -363,6 +378,9 @@ export class AppointmentService {
       this.validateBookingWindow(doctor);
     }
 
+    // Day 21: leave check — reject booking if doctor is on leave for this date
+    await this.checkNotOnLeave(doctor.id, dto.date);
+
     const normalizedStart = this.normalizeTime(dto.startTime);
     const normalizedEnd = this.normalizeTime(dto.endTime);
 
@@ -571,6 +589,9 @@ export class AppointmentService {
     if (requestedDate.getTime() === today.getTime()) {
       this.validateBookingWindow(doctor);
     }
+
+    // Day 21: leave check — reject reschedule if doctor is on leave for the new date
+    await this.checkNotOnLeave(doctor.id, dto.newDate);
 
     const newSlot = await this.slotRepo.findOne({
       where: {
