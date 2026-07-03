@@ -80,10 +80,14 @@ export class DoctorProfile {
   @Column({ type: 'int', name: 'max_patients_per_wave', nullable: true })
   maxPatientsPerWave: number | null;
 
-  // Slot duration in minutes — varies by specialization
-  // e.g. Dermatologist: 30, Gynaecologist: 60, General Physician: 15
-  @Column({ type: 'int', name: 'slot_duration', default: 30 })
-  slotDuration: number;
+  // Day 20: Future booking configuration
+  // false = today only (default), true = allow future bookings
+  @Column({ type: 'boolean',name: 'allow_future_booking', default: false })
+  allowFutureBooking: boolean;
+
+  // Day 20: Max days ahead a patient can book — null means default 7 days
+  @Column({ type: 'int', name: 'max_future_booking_days', nullable: true })
+  maxFutureBookingDays: number | null;
 
   @CreateDateColumn()
   createdAt: Date;
