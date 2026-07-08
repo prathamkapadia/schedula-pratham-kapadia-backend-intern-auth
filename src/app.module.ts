@@ -14,6 +14,9 @@ import { RecurringAvailability, CustomAvailability } from './doctor/availability
 import { Slot } from './doctor/slot.entity';
 import { Appointment } from './appointment/appointment.entity';
 import { Notification } from './notification/notification.entity';
+import { NotificationModule } from './notification/notification.module';
+import { Notification } from './notification/notification.entity';
+import { DoctorLeave } from './doctor/doctor-leave.entity';
 
 @Controller()
 class AppController {
@@ -76,9 +79,11 @@ class AppController {
           Slot,
           Appointment,
           Notification,
+          DoctorLeave,
         ],
         synchronize: false,
         ssl: { rejectUnauthorized: false },
+        migrations: ['dist/migrations/*.js'],
       }),
     }),
     AuthModule,

@@ -15,8 +15,8 @@ import {
   CreateCustomAvailabilityDto,
 } from './availability.dto';
 
-const CLINIC_START = '09:00';
-const CLINIC_END = '20:00';
+const CLINIC_START = '00:00';
+const CLINIC_END = '23:59';
 
 const DAY_MAP: Record<number, DayOfWeek> = {
   0: DayOfWeek.SUNDAY,
