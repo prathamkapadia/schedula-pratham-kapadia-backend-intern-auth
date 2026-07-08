@@ -59,7 +59,8 @@ export class DoctorProfile {
   @Column({ type: 'jsonb', default: [] })
   services: string[];
 
-  // Slot duration in minutes — used only when schedulingType is STREAM
+  // Slot duration in minutes (STREAM only) — varies by specialization
+  // e.g. Dermatologist: 30, Gynaecologist: 60, General Physician: 15
   @Column({ type: 'int', name: 'slot_duration', default: 30 })
   slotDuration: number;
 
