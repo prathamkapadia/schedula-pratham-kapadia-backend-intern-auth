@@ -8,12 +8,14 @@ import { DoctorProfile } from '../doctor/doctor-profile.entity';
 import { NotificationModule } from '../notification/notification.module';
 import { Slot } from '../doctor/slot.entity';
 import { User } from '../auth/user.entity';
+import { NotificationModule } from '../notification/notification.module';
 import { DoctorLeave } from '../doctor/doctor-leave.entity';
 
 @Module({
   imports: [
     TypeOrmModule.forFeature([Appointment, DoctorProfile, Slot, User, DoctorLeave]),
     AuthModule,
+    NotificationModule,
   ],
   controllers: [AppointmentController],
   providers: [AppointmentService],
