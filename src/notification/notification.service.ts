@@ -15,9 +15,9 @@ export class NotificationService {
     private readonly notificationRepo: Repository<Notification>,
   ) {}
 
-  // ─── Internal: called by AppointmentService ───────────────────────────────
+  // ─── Reusable create — called by AppointmentService ──────────────────────
 
-  async createNotification(
+  async create(
     patientId: string,
     type: NotificationType,
     title: string,
@@ -98,7 +98,6 @@ export class NotificationService {
       throw new NotFoundException(
         `Notification with ID ${notificationId} not found`,
       );
-      // Intentionally same message as above — don't leak that it exists
     }
 
     if (notification.isRead) {
